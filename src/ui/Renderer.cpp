@@ -11,7 +11,7 @@ namespace mesh::ui {
 using namespace mesh::config::ui;
 
 void Renderer::init() {
-    sprite_.setPsram(false);
+    sprite_.setPsram(false); // ESP32-C6 has no PSRAM; ensure sprite uses internal SRAM
     sprite_.setColorDepth(16);
     sprite_.createSprite(kScreenWidth, kScreenHeight);
 }
@@ -66,9 +66,8 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
     const int16_t toastW = kScreenWidth - 2 * kToastMarginH;
 
     sprite_.setTextSize(1);
-    const int16_t senderH = 10;
-    const int16_t textH = 10;
-    const int16_t toastH = kToastPadding + senderH + 2 + textH + kToastPadding + kToastTimerHeight;
+    const int16_t lineH = sprite_.fontHeight();
+    const int16_t toastH = kToastPadding + lineH + 2 + lineH + kToastPadding + kToastTimerHeight;
 
     sprite_.fillRoundRect(toastX, toastY, toastW, toastH, kToastRadius, kColorToast);
 
@@ -80,7 +79,7 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
 
     sprite_.setTextColor(kColorToastText);
     sprite_.drawString(toast.text, toastX + kToastPadding,
-                       toastY + kToastPadding + senderH + 2);
+                       toastY + kToastPadding + lineH + 2);
 
     const int16_t timerW = static_cast<int16_t>(
         (1.0f - progress) * (toastW - 2 * kToastRadius));
@@ -195,11 +194,17 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
     const size_t count = state.toastManager->historyCount();
     if (count == 0) return;
 
+    constexpr int16_t kPad = 6;
+    constexpr int16_t kSenderRowH = 12;
+    constexpr int16_t kTextRowH = 14;
+    constexpr int16_t kSepDotPitch = 4;
+    constexpr int16_t kSepH = 4;
+
     const int16_t overlayH = kScreenHeight - top;
-    sprite_.fillRect(0, top, kScreenWidth, overlayH, rgb565(0x0d, 0x11, 0x17));
+    sprite_.fillRect(0, top, kScreenWidth, overlayH, kColorStatusBar);
 
     sprite_.setTextSize(1);
-    int16_t y = top + 6;
+    int16_t y = top + kPad;
 
     for (size_t i = 0; i < count && i < kHistoryMaxEntries; ++i) {
         const auto& entry = state.toastManager->historyAt(i);
@@ -209,7 +214,7 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
         snprintf(senderBuf, sizeof(senderBuf), "!%08X", entry.sender);
         sprite_.setTextColor(kColorAccentBlue);
         sprite_.setTextDatum(top_left);
-        sprite_.drawString(senderBuf, 6, y);
+        sprite_.drawString(senderBuf, kPad, y);
 
         const uint32_t agoMs = state.nowMs - entry.timestampMs;
         const uint32_t agoMin = agoMs / 60000;
@@ -221,19 +226,19 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
         }
         sprite_.setTextColor(kColorTextDim);
         sprite_.setTextDatum(top_right);
-        sprite_.drawString(timeBuf, kScreenWidth - 6, y);
+        sprite_.drawString(timeBuf, kScreenWidth - kPad, y);
 
-        y += 12;
+        y += kSenderRowH;
         sprite_.setTextColor(kColorTextPrimary);
         sprite_.setTextDatum(top_left);
-        sprite_.drawString(entry.text, 6, y);
+        sprite_.drawString(entry.text, kPad, y);
 
-        y += 14;
+        y += kTextRowH;
 
-        for (int16_t dx = 6; dx < kScreenWidth - 6; dx += 4) {
+        for (int16_t dx = kPad; dx < kScreenWidth - kPad; dx += kSepDotPitch) {
             sprite_.drawPixel(dx, y, kColorCardBorder);
         }
-        y += 4;
+        y += kSepH;
     }
 
     sprite_.setTextColor(kColorTextDim);

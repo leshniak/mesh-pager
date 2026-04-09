@@ -8,23 +8,29 @@ namespace mesh::ui {
 class ToastManager;
 
 struct RenderState {
+    // Status bar
     const char* channelName = nullptr;
     protocol::NodeId nodeId = 0;
     uint8_t batteryPercent = 0;
 
+    // Message card
     const char* messageText = nullptr;
     uint8_t messageIndex = 0;
     uint8_t messageCount = 0;
 
+    // Hold-to-send feedback
     float holdProgress = 0.0f;
     bool isHolding = false;
 
+    // Send feedback
     bool sentFlash = false;
     bool errorFlash = false;
 
+    // Overlays
     bool showHistory = false;
     bool showHint = true;
 
+    // Toast data
     const ToastManager* toastManager = nullptr;
     uint32_t nowMs = 0;
 };

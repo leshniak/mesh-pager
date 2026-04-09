@@ -3,12 +3,12 @@
 ## Build & Upload
 
 ```bash
-# PlatformIO binary (not in PATH)
-~/.platformio/penv/bin/pio run                    # build
-~/.platformio/penv/bin/pio run -t upload --upload-port /dev/tty.usbmodem1101  # flash
+pio run                                            # build
+pio run -t upload --upload-port <PORT>              # flash
+pio test -e native                                 # run host-side unit tests
 ```
 
-**Upload port is always `/dev/tty.usbmodem1101`** — never auto-detect or change it.
+**Upload port** — ask the user for the port if not already specified in the conversation. Never auto-detect.
 
 ## Hardware Quirks
 

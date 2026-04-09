@@ -13,10 +13,11 @@ size_t buildPacket(const PacketHeader& header,
     const size_t totalLen = kMeshHeaderLen + payloadLen;
     if (outFrameMax < totalLen) return 0;
 
-    // Encrypt payload in-place
+    // Encrypt the protobuf payload in-place before framing.
+    // The nonce is derived from packetId + source, so each packet gets a unique keystream.
     aesCtrCrypt(plainPayload, payloadLen, header.packetId, header.source, key);
 
-    // Write header
+    // Write the 16-byte mesh header (all fields little-endian where multi-byte)
     putLe32(outFrame + 0, header.dest);
     putLe32(outFrame + 4, header.source);
     putLe32(outFrame + 8, header.packetId);
@@ -25,7 +26,7 @@ size_t buildPacket(const PacketHeader& header,
     outFrame[14] = header.nextHop;
     outFrame[15] = header.relayNode;
 
-    // Append encrypted payload
+    // Append the now-encrypted payload after the header
     std::memcpy(outFrame + kMeshHeaderLen, plainPayload, payloadLen);
     return totalLen;
 }
@@ -36,9 +37,10 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
                       char* outText, size_t outTextMax, size_t& outTextLen) {
     outTextLen = 0;
 
+    // Minimum frame: 16-byte header + at least 2 bytes of protobuf
     if (frameLen < kMeshHeaderLen + 2) return MeshError::PacketTooShort;
 
-    // Parse header
+    // Extract the 16-byte header
     outHeader.dest       = getLe32(frame + 0);
     outHeader.source     = getLe32(frame + 4);
     outHeader.packetId   = getLe32(frame + 8);
@@ -47,7 +49,7 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
     outHeader.nextHop    = frame[14];
     outHeader.relayNode  = frame[15];
 
-    // Decrypt payload
+    // Decrypt the payload into a local buffer (don't modify the original frame)
     const size_t encLen = frameLen - kMeshHeaderLen;
     if (encLen > kMaxEncryptedLen) return MeshError::PacketTooLong;
 
@@ -55,7 +57,7 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
     std::memcpy(decrypted, frame + kMeshHeaderLen, encLen);
     aesCtrCrypt(decrypted, encLen, outHeader.packetId, outHeader.source, key);
 
-    // Decode protobuf
+    // Decode the protobuf Data message to extract port number and payload
     uint32_t port = 0;
     const uint8_t* payload = nullptr;
     size_t payloadLen = 0;
@@ -63,12 +65,13 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
         return MeshError::DecodeFailed;
     }
 
+    // Only extract text from TextMessage port. Other ports (Routing, Position, etc.)
+    // are valid packets but contain no text for us to display.
     if (port != static_cast<uint32_t>(PortNum::TextMessage) || !payload || payloadLen == 0) {
-        // Not a text message — not an error, just nothing to extract
         return MeshError::Ok;
     }
 
-    // Sanitize to printable ASCII
+    // Sanitize to printable ASCII — replace control chars and high bytes with '.'
     const size_t copyLen = (payloadLen < outTextMax - 1) ? payloadLen : (outTextMax - 1);
     for (size_t i = 0; i < copyLen; ++i) {
         const uint8_t ch = payload[i];

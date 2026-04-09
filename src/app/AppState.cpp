@@ -4,9 +4,13 @@
 namespace mesh::app {
 
 State nextState(State current, const InputEvents& events) {
+    // Only transition from Idle. Other states are transient — the caller
+    // executes the action and immediately returns to Idle.
     if (current != State::Idle) return current;
 
-    // Priority: power off > sleep timeout > transmit > rx
+    // Priority order: power off > sleep > transmit > receive
+    // This ensures safety-critical actions (power off) always take precedence.
+
     if (events.longPress) {
         return State::PoweringOff;
     }
@@ -16,7 +20,7 @@ State nextState(State current, const InputEvents& events) {
     }
 
     if (events.doubleClick) {
-        return State::Idle;  // message advance handled by caller
+        return State::Idle;  // message advance is handled directly by caller
     }
 
     if (events.holdComplete) {

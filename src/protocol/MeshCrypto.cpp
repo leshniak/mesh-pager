@@ -8,14 +8,18 @@ namespace mesh::protocol {
 void aesCtrCrypt(uint8_t* buffer, size_t len,
                  PacketId packetId, NodeId fromNode,
                  const uint8_t key[kKeyLen]) {
+    // Build the 16-byte nonce: packetId (8 LE) + fromNode (4 LE) + zeros (4)
     uint8_t nonce[kNonceLen] = {};
     uint8_t streamBlock[kNonceLen] = {};
     size_t ncOff = 0;
 
+    // packetId is 32-bit but occupies the first 8 bytes (upper 4 are zero)
     const uint64_t packetIdU64 = static_cast<uint64_t>(packetId);
     std::memcpy(nonce, &packetIdU64, 8);
     std::memcpy(nonce + 8, &fromNode, 4);
+    // nonce[12..15] remain zero
 
+    // mbedtls AES-CTR: encrypts/decrypts buffer in-place
     mbedtls_aes_context ctx;
     mbedtls_aes_init(&ctx);
     mbedtls_aes_setkey_enc(&ctx, key, 256);

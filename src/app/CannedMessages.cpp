@@ -11,10 +11,12 @@ void CannedMessages::init(const char* const* msgs, size_t count) {
     messages_ = msgs;
     count_ = count;
 
+    // Load persisted message index from NVS flash (read-only mode)
     prefs.begin(config::kAppName, true);
     index_ = prefs.getUChar(config::kMsgIndexKey, 0);
     prefs.end();
 
+    // Clamp to valid range in case messages were removed since last save
     if (index_ >= count_) {
         index_ = 0;
     }
@@ -36,6 +38,8 @@ void CannedMessages::previous() {
 }
 
 void CannedMessages::save() {
+    // Only write to flash if the index actually changed — avoids unnecessary
+    // flash wear (NVS uses a log-structured format but still has write limits).
     prefs.begin(config::kAppName, false);
     if (index_ != prefs.getUChar(config::kMsgIndexKey, 0xFF)) {
         prefs.putUChar(config::kMsgIndexKey, index_);

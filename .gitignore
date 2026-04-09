@@ -64,3 +64,6 @@ Temporary Items
 
 include/secrets.h
 **/secrets.h
+
+# Git worktrees
+.worktrees/

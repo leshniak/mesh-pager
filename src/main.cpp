@@ -3,6 +3,7 @@
 
 #include "config/AppConfig.h"
 #include "config/Pins.h"
+#include "config/UIConfig.h"
 #include "protocol/MeshTypes.h"
 #include "protocol/MeshCodec.h"
 #include "protocol/MeshPacket.h"
@@ -10,8 +11,11 @@
 #include "hal/PowerManager.h"
 #include "hal/Buzzer.h"
 #include "hal/Display.h"
+#include "hal/TouchInput.h"
 #include "app/AppState.h"
 #include "app/CannedMessages.h"
+#include "ui/Renderer.h"
+#include "ui/ToastManager.h"
 #include "secrets.h"
 
 namespace {
@@ -20,7 +24,10 @@ using namespace mesh;
 
 // Module instances
 hal::RadioHal radioHal;
+hal::TouchInput touchInput;
 app::CannedMessages cannedMessages;
+ui::Renderer renderer;
+ui::ToastManager toastManager;
 
 // Mesh identity
 uint8_t channelKeyBytes[protocol::kKeyLen] = {};
@@ -36,6 +43,21 @@ bool pendingRx = false;
 uint8_t rxFrameBuf[protocol::kRxBufferLen] = {};
 size_t rxFrameLen = 0;
 
+// UI state
+bool dirty = true;
+bool displaySleeping = false;
+bool showHistory = false;
+bool showHint = true;
+
+// Hold state
+bool isHolding = false;
+float holdProgress = 0.0f;
+
+// Sent flash
+bool sentFlash = false;
+bool errorFlash = false;
+uint32_t flashStartMs = 0;
+
 void onRadioRx(const uint8_t* data, size_t len) {
     if (len <= protocol::kRxBufferLen) {
         memcpy(rxFrameBuf, data, len);
@@ -44,21 +66,19 @@ void onRadioRx(const uint8_t* data, size_t len) {
     }
 }
 
-void handleTransmit() {
+bool handleTransmit(uint32_t now) {
     auto text = cannedMessages.current();
-    if (text.empty()) return;
+    if (text.empty()) return false;
 
-    // Encode protobuf payload
     uint8_t payload[4 + protocol::kMaxTextLen];
     const size_t payloadLen = protocol::encodeTextPayload(
         reinterpret_cast<const uint8_t*>(text.data()), text.size(),
         payload, sizeof(payload));
     if (payloadLen == 0) {
         hal::display::logError("TX encode failed");
-        return;
+        return false;
     }
 
-    // Build packet header
     protocol::PacketHeader hdr;
     hdr.dest = protocol::kBroadcastAddr;
     hdr.source = nodeId;
@@ -67,24 +87,26 @@ void handleTransmit() {
         config::kHopLimit, config::kWantAck, config::kViaMqtt, config::kHopStart);
     hdr.channelHash = channelHashByte;
 
-    // Build and transmit frame
     uint8_t frame[protocol::kMeshHeaderLen + sizeof(payload)];
     const size_t frameLen = protocol::buildPacket(
         hdr, payload, payloadLen, channelKeyBytes, frame, sizeof(frame));
     if (frameLen == 0) {
         hal::display::logError("TX build failed");
-        return;
+        return false;
     }
 
     if (radioHal.transmit(frame, frameLen) == protocol::MeshError::Ok) {
-        hal::display::logInfo("<< <!%08X>\n%s\n", nodeId, text.data());
+        hal::display::logInfo("<< <!%08X> %s", nodeId, text.data());
         hal::playTxTone();
-    } else {
-        hal::display::logError("TX failed");
+        toastManager.addMessage(nodeId, text.data(), now);
+        return true;
     }
+
+    hal::display::logError("TX failed");
+    return false;
 }
 
-void handleReceive() {
+void handleReceive(uint32_t now) {
     if (!pendingRx) return;
     pendingRx = false;
 
@@ -101,11 +123,14 @@ void handleReceive() {
     if (hdr.source == nodeId) return;
     if (textLen == 0) return;
 
-    hal::display::logInfo(">> <!%08X>\n%s\n", hdr.source, textOut);
+    hal::display::logInfo(">> <!%08X> %s", hdr.source, textOut);
     hal::playRxTone();
+    toastManager.addMessage(hdr.source, textOut, now);
+    dirty = true;
 }
 
 void handleSleep() {
+    displaySleeping = true;
     hal::display::sleep();
 
     if (hal::power::isCharging()) return;
@@ -124,6 +149,26 @@ void handlePowerOff() {
     hal::power::powerOff();
 }
 
+void renderFrame(uint32_t now) {
+    ui::RenderState state;
+    state.channelName = channelName;
+    state.nodeId = nodeId;
+    state.batteryPercent = static_cast<uint8_t>(M5.Power.getBatteryLevel());
+    state.messageText = cannedMessages.current().data();
+    state.messageIndex = cannedMessages.index();
+    state.messageCount = static_cast<uint8_t>(cannedMessages.count());
+    state.holdProgress = holdProgress;
+    state.isHolding = isHolding;
+    state.sentFlash = sentFlash;
+    state.errorFlash = errorFlash;
+    state.showHistory = showHistory;
+    state.showHint = showHint;
+    state.toastManager = &toastManager;
+    state.nowMs = now;
+
+    renderer.render(state);
+}
+
 }  // anonymous namespace
 
 void setup() {
@@ -136,12 +181,12 @@ void setup() {
 
     hal::power::init();
     hal::display::init();
+    touchInput.init();
+    renderer.init();
 
-    // Initialize canned messages
     constexpr size_t msgCount = sizeof(messages) / sizeof(messages[0]);
     cannedMessages.init(messages, msgCount);
 
-    // Derive mesh identity from MAC
     uint8_t mac[6] = {};
     WiFi.mode(WIFI_STA);
     WiFi.macAddress(mac);
@@ -151,25 +196,23 @@ void setup() {
     randomSeed(static_cast<uint32_t>(esp_random()));
     packetIdCounter = static_cast<uint32_t>(random(0x1000, 0xFFFF));
 
-    // Decode channel key and compute hash
     if (!protocol::decodeBase64Key(channelKey, channelKeyBytes)) {
         hal::display::logError("Channel key decode failed");
         while (true) delay(1000);
     }
     channelHashByte = protocol::computeChannelHash(channelName, channelKeyBytes);
 
-    // Initialize radio
     radioHal.setRxCallback(onRadioRx);
     if (radioHal.begin() != protocol::MeshError::Ok) {
         hal::display::logError("Radio init failed");
         while (true) delay(1000);
     }
 
-    hal::display::logInfo("NodeId:  !%08X", nodeId);
+    hal::display::logInfo("NodeId: !%08X", nodeId);
     hal::display::logInfo("Channel: %s", channelName);
     hal::display::logInfo("Battery: %d%%", M5.Power.getBatteryLevel());
-    hal::display::logInfo("Canned message: %s", cannedMessages.current().data());
-    hal::display::logInfo("");
+
+    lastActionMs = millis();
 }
 
 void loop() {
@@ -179,61 +222,166 @@ void loop() {
     const uint32_t now = millis();
     const bool charging = hal::power::isCharging();
 
-    // Detect charge state change before updating wasCharging
+    // Detect charge state change
     const bool chargingChanged = (wasCharging != charging);
-
-    // Reset activity timer on charge state change or touch
     if (chargingChanged) {
         wasCharging = charging;
         lastActionMs = now;
-        hal::display::wakeup();
-    }
-    if (M5.Touch.getCount() > 0) {
-        hal::display::wakeup();
-        lastActionMs = now;
+        if (displaySleeping) {
+            displaySleeping = false;
+            hal::display::wakeup();
+            touchInput.consumeNextTouch();
+        }
+        dirty = true;
     }
 
-    // Gather input events
+    // Process touch input
+    auto touchEvent = touchInput.update();
+
+    if (touchEvent.touching) {
+        lastActionMs = now;
+
+        if (displaySleeping && touchEvent.gesture == hal::TouchGesture::Wake) {
+            displaySleeping = false;
+            hal::display::wakeup();
+            dirty = true;
+        }
+    }
+
+    // Handle touch gestures (only when display is awake)
+    if (!displaySleeping) {
+        switch (touchEvent.gesture) {
+            case hal::TouchGesture::SwipeLeft:
+                cannedMessages.previous();
+                showHint = false;
+                isHolding = false;
+                holdProgress = 0.0f;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::SwipeRight:
+                cannedMessages.next();
+                showHint = false;
+                isHolding = false;
+                holdProgress = 0.0f;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::HoldTick:
+                isHolding = true;
+                holdProgress = touchEvent.holdProgress;
+                showHint = false;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::HoldComplete:
+                isHolding = false;
+                holdProgress = 0.0f;
+                showHint = false;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::StatusBarTap:
+                showHistory = !showHistory;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::None:
+                if (!touchEvent.touching && isHolding) {
+                    isHolding = false;
+                    holdProgress = 0.0f;
+                    dirty = true;
+                }
+                break;
+
+            default:
+                break;
+        }
+
+        // Close history on any card area touch
+        if (showHistory && touchEvent.touching
+            && touchEvent.gesture != hal::TouchGesture::StatusBarTap) {
+            showHistory = false;
+            dirty = true;
+        }
+    }
+
+    // Update toast manager
+    if (toastManager.update(now)) {
+        dirty = true;
+    }
+
+    // Sent/error flash timer
+    if (sentFlash || errorFlash) {
+        if (now - flashStartMs >= config::ui::kSentFlashMs) {
+            sentFlash = false;
+            errorFlash = false;
+            dirty = true;
+        }
+    }
+
+    // Gather input events for state machine (BOTH touch AND physical buttons)
     app::InputEvents events;
-    events.singleClick   = M5.BtnA.wasSingleClicked();
-    events.doubleClick   = M5.BtnA.wasDoubleClicked();
-    events.longPress     = M5.BtnA.pressedFor(config::kButtonHoldMs);
-    events.touchActive   = M5.Touch.getCount() > 0;
-    events.isCharging    = charging;
+    events.holdComplete    = (touchEvent.gesture == hal::TouchGesture::HoldComplete);
+    events.singleClick     = M5.BtnA.wasSingleClicked();
+    events.doubleClick     = M5.BtnA.wasDoubleClicked();
+    events.longPress       = M5.BtnA.pressedFor(config::kButtonHoldMs);
+    events.touchActive     = touchEvent.touching;
+    events.isCharging      = charging;
     events.chargingChanged = chargingChanged;
-    events.rxReady       = pendingRx;
+    events.rxReady         = pendingRx;
     events.timeSinceLastActionMs = now - lastActionMs;
 
     // State machine
     appState = app::nextState(appState, events);
 
     switch (appState) {
-        case app::State::Transmitting:
+        case app::State::Transmitting: {
             lastActionMs = now;
-            handleTransmit();
+            const bool success = handleTransmit(now);
+            if (success) {
+                sentFlash = true;
+            } else {
+                errorFlash = true;
+            }
+            flashStartMs = now;
+            dirty = true;
             appState = app::State::Idle;
             break;
+        }
 
         case app::State::Receiving:
-            handleReceive();
+            handleReceive(now);
             appState = app::State::Idle;
             break;
 
         case app::State::EnteringSleep:
             handleSleep();
-            appState = app::State::Idle;  // only reached if charging
+            appState = app::State::Idle;
             break;
 
         case app::State::PoweringOff:
             handlePowerOff();
-            break;  // never reached
+            break;
 
         case app::State::Idle:
+            // Physical button: double click advances message
             if (events.doubleClick) {
                 lastActionMs = now;
                 cannedMessages.next();
-                hal::display::logInfo("Canned message:\n%s\n", cannedMessages.current().data());
+                showHint = false;
+                dirty = true;
+            }
+            // Physical button: single click resets action timer
+            if (events.singleClick) {
+                lastActionMs = now;
             }
             break;
+    }
+
+    // Render if dirty and display is awake
+    if (dirty && !displaySleeping) {
+        renderFrame(now);
+        dirty = false;
     }
 }

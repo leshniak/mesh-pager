@@ -129,16 +129,16 @@ void Renderer::drawMessageCard(const RenderState& state, int16_t top, int16_t bo
         sprite_.setTextSize(1);
         sprite_.setTextColor(kColorTextDim);
         sprite_.setTextDatum(top_center);
-        sprite_.drawString("swipe | hold to send",
+        sprite_.drawString("swipe - hold to send",
                            kScreenWidth / 2, dotsBaseline + kDotRadius * 2 + 6);
     }
 
     if (state.isHolding && state.holdProgress > 0.0f) {
         const int16_t barY = cardY + cardH - kProgressBarHeight;
-        const int16_t barW = static_cast<int16_t>(
-            state.holdProgress * (cardW - 2));
+        const int16_t maxBarW = cardW - 2 * kCardRadius;
+        const int16_t barW = static_cast<int16_t>(state.holdProgress * maxBarW);
         if (barW > 0) {
-            sprite_.fillRect(cardX + 1, barY, barW, kProgressBarHeight, kColorSendGreen);
+            sprite_.fillRect(cardX + kCardRadius, barY, barW, kProgressBarHeight, kColorSendGreen);
         }
     }
 }
@@ -160,6 +160,14 @@ void Renderer::drawCenteredText(const char* text, int16_t cx, int16_t cy,
                                 int16_t maxWidth, uint16_t color) {
     sprite_.setTextColor(color);
     sprite_.setTextDatum(middle_center);
+
+    // Auto-reduce text size if too wide (largest font that fits)
+    if (sprite_.textWidth(text) > maxWidth) {
+        sprite_.setTextSize(1.5f);
+        if (sprite_.textWidth(text) > maxWidth) {
+            sprite_.setTextSize(1);
+        }
+    }
 
     const char* lineStart = text;
     const int16_t lineHeight = sprite_.fontHeight();

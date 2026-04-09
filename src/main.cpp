@@ -132,6 +132,7 @@ void handleReceive(uint32_t now) {
 void handleSleep() {
     displaySleeping = true;
     hal::display::sleep();
+    touchInput.consumeNextTouch();
 
     if (hal::power::isCharging()) return;
 
@@ -375,6 +376,7 @@ void loop() {
             // Physical button: single click resets action timer
             if (events.singleClick) {
                 lastActionMs = now;
+                showHint = false;
             }
             break;
     }

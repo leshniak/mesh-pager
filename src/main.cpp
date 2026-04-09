@@ -24,6 +24,7 @@
 #include "protocol/MeshTypes.h"
 #include "protocol/MeshCodec.h"
 #include "protocol/MeshPacket.h"
+#include "protocol/PacketDedup.h"
 #include "hal/RadioHal.h"
 #include "hal/PowerManager.h"
 #include "hal/Buzzer.h"
@@ -60,6 +61,7 @@ bool wasCharging = false;      ///< Previous loop's charging state (for edge det
 bool pendingRx = false;        ///< Set by radio ISR callback when a packet arrives
 uint8_t rxFrameBuf[protocol::kRxBufferLen] = {};  ///< Buffer for received radio frame
 size_t rxFrameLen = 0;         ///< Length of the received frame in rxFrameBuf
+protocol::PacketDedup<> packetDedup;  ///< Deduplication cache (64 entries, 10min expiry)
 
 // ── UI state flags ──────────────────────────────────────────────────────────
 // These are the "dirty flag" rendering system: any change sets dirty=true,
@@ -169,6 +171,7 @@ void handleReceive(uint32_t now) {
     if (hdr.channelHash != channelHashByte) return;  // Different channel
     if (hdr.source == nodeId) return;  // Our own echo (relayed back)
     if (textLen == 0) return;  // Non-text packet (e.g., position, telemetry)
+    if (packetDedup.isDuplicate(hdr.source, hdr.packetId, now)) return;  // Already seen via another relay
 
     hal::display::logInfo(">> <!%08X> %s", hdr.source, textOut);
     hal::playRxTone();

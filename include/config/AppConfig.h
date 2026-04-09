@@ -37,6 +37,9 @@ inline constexpr uint8_t kHopStart  = 3;
 inline constexpr bool kWantAck      = false;
 inline constexpr bool kViaMqtt      = false;
 
+// Send-on-wake: transmit current canned message immediately after deep sleep wake
+inline constexpr bool kSendOnWake   = false;
+
 // Serial
 inline constexpr uint32_t kSerialBaudRate = 115200;
 

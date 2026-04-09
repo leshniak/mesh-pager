@@ -1,5 +1,6 @@
 #include <M5Unified.h>
 #include <WiFi.h>
+#include <esp_sleep.h>
 
 #include "config/AppConfig.h"
 #include "config/Pins.h"
@@ -217,6 +218,20 @@ void setup() {
     hal::display::logInfo("Battery: %d%%", M5.Power.getBatteryLevel());
 
     lastActionMs = millis();
+
+    // Send-on-wake: auto-transmit when waking from deep sleep
+    if constexpr (config::kSendOnWake) {
+        if (esp_sleep_get_wakeup_cause() != ESP_SLEEP_WAKEUP_UNDEFINED) {
+            const uint32_t now = millis();
+            if (handleTransmit(now)) {
+                sentFlash = true;
+            } else {
+                errorFlash = true;
+            }
+            flashStartMs = now;
+            dirty = true;
+        }
+    }
 }
 
 void loop() {

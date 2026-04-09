@@ -2,11 +2,38 @@
 #include "config/UIConfig.h"
 
 #include <M5Unified.h>
+#include <algorithm>
+#include <cstdlib>
 
 namespace mesh::hal {
 
 void TouchInput::init() {
     M5.Touch.setFlickThresh(config::ui::kSwipeThresholdPx);
+}
+
+TouchEvent TouchInput::processHoldOrSwipe(const m5::touch_detail_t& t, uint32_t now) {
+    TouchEvent event;
+    const int16_t dx = t.x - startX_;
+
+    if (std::abs(static_cast<int32_t>(dx)) > static_cast<int32_t>(config::ui::kSwipeThresholdPx)) {
+        event.gesture = (dx > 0) ? TouchGesture::SwipeRight : TouchGesture::SwipeLeft;
+        state_ = GestureState::Swiping;
+        return event;
+    }
+
+    const uint32_t elapsed = now - startMs_;
+    const float progress = static_cast<float>(elapsed) / config::ui::kHoldToSendMs;
+
+    if (elapsed >= config::ui::kHoldToSendMs) {
+        event.gesture = TouchGesture::HoldComplete;
+        event.holdProgress = 1.0f;
+        state_ = GestureState::Cooldown;
+        return event;
+    }
+
+    event.gesture = TouchGesture::HoldTick;
+    event.holdProgress = std::min(progress, 1.0f);
+    return event;
 }
 
 TouchEvent TouchInput::update() {
@@ -17,12 +44,7 @@ TouchEvent TouchInput::update() {
 
     if (count == 0) {
         // Finger lifted
-        if (state_ == GestureState::Swiping) {
-            state_ = GestureState::Idle;
-        }
-        if (state_ != GestureState::Idle) {
-            state_ = GestureState::Idle;
-        }
+        state_ = GestureState::Idle;
         return event;
     }
 
@@ -47,59 +69,21 @@ TouchEvent TouchInput::update() {
             }
 
             startX_ = t.x;
-            startY_ = t.y;
             startMs_ = now;
             state_ = GestureState::Tracking;
             break;
         }
 
         case GestureState::Tracking: {
-            const int16_t dx = t.x - startX_;
-
-            if (abs(dx) > static_cast<int16_t>(config::ui::kSwipeThresholdPx)) {
-                event.gesture = (dx > 0) ? TouchGesture::SwipeRight : TouchGesture::SwipeLeft;
-                state_ = GestureState::Swiping;
-                return event;
+            event = processHoldOrSwipe(t, now);
+            if (event.gesture == TouchGesture::HoldTick) {
+                state_ = GestureState::Holding;
             }
-
-            const uint32_t elapsed = now - startMs_;
-            const float progress = static_cast<float>(elapsed) / config::ui::kHoldToSendMs;
-
-            if (elapsed >= config::ui::kHoldToSendMs) {
-                event.gesture = TouchGesture::HoldComplete;
-                event.holdProgress = 1.0f;
-                state_ = GestureState::Cooldown;
-                return event;
-            }
-
-            event.gesture = TouchGesture::HoldTick;
-            event.holdProgress = progress;
-            state_ = GestureState::Holding;
             return event;
         }
 
         case GestureState::Holding: {
-            const int16_t dx = t.x - startX_;
-
-            if (abs(dx) > static_cast<int16_t>(config::ui::kSwipeThresholdPx)) {
-                event.gesture = (dx > 0) ? TouchGesture::SwipeRight : TouchGesture::SwipeLeft;
-                state_ = GestureState::Swiping;
-                return event;
-            }
-
-            const uint32_t elapsed = now - startMs_;
-            const float progress = static_cast<float>(elapsed) / config::ui::kHoldToSendMs;
-
-            if (elapsed >= config::ui::kHoldToSendMs) {
-                event.gesture = TouchGesture::HoldComplete;
-                event.holdProgress = 1.0f;
-                state_ = GestureState::Cooldown;
-                return event;
-            }
-
-            event.gesture = TouchGesture::HoldTick;
-            event.holdProgress = progress;
-            return event;
+            return processHoldOrSwipe(t, now);
         }
 
         case GestureState::Swiping:

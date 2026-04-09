@@ -70,6 +70,10 @@ Custom implementation (not the official Meshtastic library):
 
 `include/secrets.h` contains channel name, base64 key, and canned message array. Never commit it. See `secrets.example.h` for the template.
 
+## Versioning
+
+Uses [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`). Tag releases on the master branch.
+
 ## Common Pitfalls
 
 - **Format specifiers on RISC-V**: `uint32_t` is `unsigned int`, not `unsigned long`. Use `%u` or cast to `unsigned`, not `%lu`.

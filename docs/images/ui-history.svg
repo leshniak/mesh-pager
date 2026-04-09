@@ -1,0 +1,52 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 240" width="202" height="360">
+  <defs>
+    <style>
+      text { font-family: monospace, 'Courier New', Courier; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="135" height="240" fill="#1a1a2e"/>
+
+  <!-- Status bar -->
+  <rect width="135" height="18" fill="#0d1117"/>
+  <line x1="0" y1="17" x2="135" y2="17" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Node ID -->
+  <text x="4" y="12" fill="#8b949e" font-size="8">!AABBCCDD</text>
+
+  <!-- Battery percentage -->
+  <text x="105" y="12" fill="#8b949e" font-size="8" text-anchor="end">85%</text>
+
+  <!-- Battery icon -->
+  <rect x="108" y="6" width="12" height="7" fill="none" stroke="#8b949e" stroke-width="0.8"/>
+  <rect x="106" y="8" width="2" height="3" fill="#8b949e"/>
+  <rect x="109" y="7" width="8" height="5" fill="#00d2b4" rx="0.5"/>
+
+  <!-- History overlay -->
+  <rect x="0" y="18" width="135" height="222" fill="#0d1117"/>
+
+  <!-- Entry 1 -->
+  <text x="6" y="34" fill="#58a6ff" font-size="7">!11223344</text>
+  <text x="129" y="34" fill="#484f58" font-size="7" text-anchor="end">&lt;1m</text>
+  <text x="6" y="46" fill="#ffffff" font-size="8">On my way!</text>
+  <!-- Dotted separator -->
+  <line x1="6" y1="52" x2="129" y2="52" stroke="#30363d" stroke-width="0.5" stroke-dasharray="1,3"/>
+
+  <!-- Entry 2 -->
+  <text x="6" y="66" fill="#58a6ff" font-size="7">!55667788</text>
+  <text x="129" y="66" fill="#484f58" font-size="7" text-anchor="end">5m</text>
+  <text x="6" y="78" fill="#ffffff" font-size="8">Hello</text>
+  <!-- Dotted separator -->
+  <line x1="6" y1="84" x2="129" y2="84" stroke="#30363d" stroke-width="0.5" stroke-dasharray="1,3"/>
+
+  <!-- Entry 3 -->
+  <text x="6" y="98" fill="#58a6ff" font-size="7">!AABBCCDD</text>
+  <text x="129" y="98" fill="#484f58" font-size="7" text-anchor="end">12m</text>
+  <text x="6" y="110" fill="#ffffff" font-size="8">Open gate</text>
+  <!-- Dotted separator -->
+  <line x1="6" y1="116" x2="129" y2="116" stroke="#30363d" stroke-width="0.5" stroke-dasharray="1,3"/>
+
+  <!-- Dismiss hint -->
+  <text x="67.5" y="132" fill="#484f58" font-size="7" text-anchor="middle">swipe up to close</text>
+</svg>

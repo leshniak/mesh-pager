@@ -2,6 +2,21 @@
 
 A Meshtastic-compatible LoRa mesh pager built on the **Arduino Nesso N1** (ESP32-C6). Sends and receives pre-configured canned messages over an encrypted mesh network with a touch UI and physical button.
 
+## UI
+
+<p align="center">
+  <img src="docs/images/ui-idle.svg" alt="Idle — message selection" width="135"/>
+  &nbsp;&nbsp;
+  <img src="docs/images/ui-sending.svg" alt="Hold to send — progress bar" width="135"/>
+  &nbsp;&nbsp;
+  <img src="docs/images/ui-toast.svg" alt="Incoming message toast" width="135"/>
+  &nbsp;&nbsp;
+  <img src="docs/images/ui-history.svg" alt="Message history overlay" width="135"/>
+</p>
+<p align="center">
+  <em>Idle &nbsp;·&nbsp; Hold to send &nbsp;·&nbsp; Incoming toast &nbsp;·&nbsp; Message history</em>
+</p>
+
 ## Features
 
 - **Canned messages** — swipe left/right to pick, hold or click to send

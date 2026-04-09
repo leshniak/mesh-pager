@@ -1,0 +1,45 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 135 240" width="202" height="360">
+  <defs>
+    <style>
+      text { font-family: monospace, 'Courier New', Courier; }
+    </style>
+  </defs>
+
+  <!-- Background -->
+  <rect width="135" height="240" fill="#1a1a2e"/>
+
+  <!-- Status bar -->
+  <rect width="135" height="18" fill="#0d1117"/>
+  <line x1="0" y1="17" x2="135" y2="17" stroke="#30363d" stroke-width="1"/>
+
+  <!-- Node ID -->
+  <text x="4" y="12" fill="#8b949e" font-size="8">!AABBCCDD</text>
+
+  <!-- Battery percentage -->
+  <text x="105" y="12" fill="#8b949e" font-size="8" text-anchor="end">85%</text>
+
+  <!-- Battery icon -->
+  <rect x="108" y="6" width="12" height="7" fill="none" stroke="#8b949e" stroke-width="0.8"/>
+  <rect x="106" y="8" width="2" height="3" fill="#8b949e"/>
+  <rect x="109" y="7" width="8" height="5" fill="#00d2b4" rx="0.5"/>
+
+  <!-- Message card (teal border during hold) -->
+  <rect x="6" y="24" width="123" height="210" fill="#161b22" rx="0"/>
+  <rect x="6" y="24" width="123" height="210" fill="none" stroke="#00d2b4" stroke-width="1"/>
+
+  <!-- Progress bar (65% fill) -->
+  <rect x="6" y="24" width="80" height="4" fill="#00d2b4"/>
+
+  <!-- Channel name -->
+  <text x="67.5" y="48" fill="#58a6ff" font-size="8" text-anchor="middle">LongFast</text>
+
+  <!-- Message text (mint color during hold) -->
+  <text x="67.5" y="135" fill="#5cffe0" font-size="16" text-anchor="middle" font-weight="bold">Open gate</text>
+
+  <!-- Page dots -->
+  <circle cx="45" cy="222" r="3" fill="#30363d"/>
+  <circle cx="56" cy="222" r="3" fill="#30363d"/>
+  <circle cx="67" cy="222" r="3" fill="#58a6ff"/>
+  <circle cx="78" cy="222" r="3" fill="#30363d"/>
+  <circle cx="89" cy="222" r="3" fill="#30363d"/>
+</svg>

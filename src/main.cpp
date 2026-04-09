@@ -1,226 +1,430 @@
 #include <M5Unified.h>
 #include <WiFi.h>
-#include <Preferences.h>
 
-#include "MeshRadio.h"
-#include "DeepSleep.h"
+#include "config/AppConfig.h"
+#include "config/Pins.h"
+#include "config/UIConfig.h"
+#include "protocol/MeshTypes.h"
+#include "protocol/MeshCodec.h"
+#include "protocol/MeshPacket.h"
+#include "hal/RadioHal.h"
+#include "hal/PowerManager.h"
+#include "hal/Buzzer.h"
+#include "hal/Display.h"
+#include "hal/TouchInput.h"
+#include "app/AppState.h"
+#include "app/CannedMessages.h"
+#include "ui/Renderer.h"
+#include "ui/ToastManager.h"
 #include "secrets.h"
 
-#define APP_NAME "mesh-remote"
-#define MESSAGE_INDEX "messageIndex"
+namespace {
 
-static const size_t messagesSize = sizeof(messages) / sizeof(*messages);
+using namespace mesh;
 
-static constexpr uint8_t LORA_ENABLE_PIN = GPIO_NUM_7;
-static constexpr uint8_t LORA_LNA_ENABLE_PIN = GPIO_NUM_5;
-static constexpr uint8_t LORA_ANTENNA_SWITCH_PIN = GPIO_NUM_6;
+// Module instances
+hal::RadioHal radioHal;
+hal::TouchInput touchInput;
+app::CannedMessages cannedMessages;
+ui::Renderer renderer;
+ui::ToastManager toastManager;
 
-static MeshRadio meshRadio;
-static Preferences preferences;
-static uint8_t messageIdx;
+// Mesh identity
+uint8_t channelKeyBytes[protocol::kKeyLen] = {};
+uint8_t channelHashByte = 0;
+protocol::NodeId nodeId = 0;
+uint32_t packetIdCounter = 0;
 
-static void onTextReceived(uint32_t fromNodeId, const char* text) {
-  M5.Log(ESP_LOG_INFO, ">> <!%08X>\n%s\n", fromNodeId, text);
-  M5.Speaker.tone(6000, 50);
+// State
+app::State appState = app::State::Idle;
+uint32_t lastActionMs = 0;
+bool wasCharging = false;
+bool pendingRx = false;
+uint8_t rxFrameBuf[protocol::kRxBufferLen] = {};
+size_t rxFrameLen = 0;
+
+// UI state
+bool dirty = true;
+bool displaySleeping = false;
+bool displayDimmed = false;
+bool showHistory = false;
+bool showHint = true;
+
+// Hold state
+bool isHolding = false;
+float holdProgress = 0.0f;
+
+// Sent flash
+bool sentFlash = false;
+bool errorFlash = false;
+uint32_t flashStartMs = 0;
+
+void onRadioRx(const uint8_t* data, size_t len) {
+    if (len <= protocol::kRxBufferLen) {
+        memcpy(rxFrameBuf, data, len);
+        rxFrameLen = len;
+        pendingRx = true;
+    }
 }
 
-static void setupM5Logging() {
-  M5.setLogDisplayIndex(0);
-  M5.Display.setTextWrap(true, true);
-  M5.Display.setTextScroll(true);
+bool handleTransmit(uint32_t now) {
+    auto text = cannedMessages.current();
+    if (text.empty()) return false;
 
-  M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_VERBOSE);
-  M5.Log.setLogLevel(m5::log_target_display, ESP_LOG_DEBUG);
+    uint8_t payload[4 + protocol::kMaxTextLen];
+    const size_t payloadLen = protocol::encodeTextPayload(
+        reinterpret_cast<const uint8_t*>(text.data()), text.size(),
+        payload, sizeof(payload));
+    if (payloadLen == 0) {
+        hal::display::logError("TX encode failed");
+        return false;
+    }
 
-  M5.Log.setEnableColor(m5::log_target_serial, false);
-  M5.Log.setEnableColor(m5::log_target_display, true);
+    protocol::PacketHeader hdr;
+    hdr.dest = protocol::kBroadcastAddr;
+    hdr.source = nodeId;
+    hdr.packetId = packetIdCounter++;
+    hdr.flags = protocol::makeMeshFlags(
+        config::kHopLimit, config::kWantAck, config::kViaMqtt, config::kHopStart);
+    hdr.channelHash = channelHashByte;
 
-  M5.Log.setSuffix(m5::log_target_serial, "\n");
-  M5.Log.setSuffix(m5::log_target_display, "\n");
+    uint8_t frame[protocol::kMeshHeaderLen + sizeof(payload)];
+    const size_t frameLen = protocol::buildPacket(
+        hdr, payload, payloadLen, channelKeyBytes, frame, sizeof(frame));
+    if (frameLen == 0) {
+        hal::display::logError("TX build failed");
+        return false;
+    }
+
+    if (radioHal.transmit(frame, frameLen) == protocol::MeshError::Ok) {
+        hal::display::logInfo("<< <!%08X> %s", nodeId, text.data());
+        hal::playTxTone();
+        toastManager.addMessage(nodeId, text.data(), now);
+        return true;
+    }
+
+    hal::display::logError("TX failed");
+    return false;
 }
 
-static void setupLoRaPowerAndRfSwitches() {
-  auto& ioExpander = M5.getIOExpander(0);
+void handleReceive(uint32_t now) {
+    if (!pendingRx) return;
+    pendingRx = false;
 
-  // LoRa reset + RF switches
-  ioExpander.digitalWrite(LORA_ENABLE_PIN, false);
-  delay(100);
-  ioExpander.digitalWrite(LORA_ENABLE_PIN, true);
-  delay(100);
+    protocol::PacketHeader hdr;
+    char textOut[200];
+    size_t textLen = 0;
 
-  ioExpander.digitalWrite(LORA_LNA_ENABLE_PIN, true);      // LORA_LNA_ENABLE
-  ioExpander.digitalWrite(LORA_ANTENNA_SWITCH_PIN, true);  // LORA_ANTENNA_SWITCH
+    auto err = protocol::parsePacket(
+        rxFrameBuf, rxFrameLen, channelKeyBytes,
+        hdr, textOut, sizeof(textOut), textLen);
+
+    if (err != protocol::MeshError::Ok) return;
+    if (hdr.channelHash != channelHashByte) return;
+    if (hdr.source == nodeId) return;
+    if (textLen == 0) return;
+
+    hal::display::logInfo(">> <!%08X> %s", hdr.source, textOut);
+    hal::playRxTone();
+    toastManager.addMessage(hdr.source, textOut, now);
+    dirty = true;
 }
 
-static void sleepLoRa() {
-  auto& ioExpander = M5.getIOExpander(0);
+void handleSleep() {
+    displaySleeping = true;
+    displayDimmed = false;
+    hal::display::sleep();
+    touchInput.consumeNextTouch();
 
-  ioExpander.digitalWrite(LORA_ENABLE_PIN, false);
-  ioExpander.digitalWrite(LORA_LNA_ENABLE_PIN, false);
-  ioExpander.digitalWrite(LORA_ANTENNA_SWITCH_PIN, false);
+    if (hal::power::isCharging()) return;
+
+    cannedMessages.save();
+    radioHal.sleep();
+    hal::power::ledOff();
+    hal::playSleepTone();
+    hal::power::enterDeepSleep();
 }
 
-static void savePreferences() {
-  preferences.begin(APP_NAME, false);
-
-  if (messageIdx != preferences.getUChar(MESSAGE_INDEX)) {
-    preferences.putUChar(MESSAGE_INDEX, messageIdx);
-  }
-
-  preferences.end();
+void handlePowerOff() {
+    cannedMessages.save();
+    radioHal.sleep();
+    hal::playPowerOffTone();
+    hal::power::powerOff();
 }
 
-static void sleep() {
-  M5.Display.sleep();
-  M5.Display.waitDisplay();
+void renderFrame(uint32_t now) {
+    ui::RenderState state;
+    state.channelName = channelName;
+    state.nodeId = nodeId;
+    state.batteryPercent = static_cast<uint8_t>(M5.Power.getBatteryLevel());
+    state.messageText = cannedMessages.current().data();
+    state.messageIndex = cannedMessages.index();
+    state.messageCount = static_cast<uint8_t>(cannedMessages.count());
+    state.holdProgress = holdProgress;
+    state.isHolding = isHolding;
+    state.sentFlash = sentFlash;
+    state.errorFlash = errorFlash;
+    state.showHistory = showHistory;
+    state.showHint = showHint;
+    state.toastManager = &toastManager;
+    state.nowMs = now;
 
-  if (M5.Power.isCharging()) {
-    return;
-  }
-
-  savePreferences();
-  meshRadio.sleep();
-  sleepLoRa();
-  M5.Power.setLed(0);
-
-  M5.Speaker.tone(2500, 100);
-  delay(150);
-  M5.Speaker.tone(2500, 100);
-  delay(150);
-
-  enterDeepSleep();
+    renderer.render(state);
 }
 
-static void powerOff() {
-  savePreferences();
-  meshRadio.sleep();
-
-  M5.Speaker.tone(6000, 100);
-  delay(150);
-  M5.Speaker.tone(4000, 100);
-  delay(150);
-  M5.Speaker.tone(2500, 100);
-  delay(150);
-
-  M5.Power.powerOff();
-}
+}  // anonymous namespace
 
 void setup() {
-  auto config = M5.config();
-  config.serial_baudrate = 115200;
-  M5.begin(config);
+    auto cfg = M5.config();
+    cfg.serial_baudrate = config::kSerialBaudRate;
+    M5.begin(cfg);
 
-  M5.Imu.sleep();
-  M5.Power.setExtOutput(false);
+    M5.Imu.sleep();
+    M5.Power.setExtOutput(false);
+    setCpuFrequencyMhz(config::kCpuFreqMHz);  // 80MHz saves ~25% power vs 160MHz
 
-  setupDeepSleep();
+    hal::power::init();
+    hal::display::init();
+    touchInput.init();
+    renderer.init();
 
-  preferences.begin(APP_NAME, true);
-  messageIdx = preferences.getUChar(MESSAGE_INDEX, 0);
-  preferences.end();
+    constexpr size_t msgCount = sizeof(messages) / sizeof(messages[0]);
+    cannedMessages.init(messages, msgCount);
 
-  if (messageIdx >= messagesSize) {
-    messageIdx = 0;
-  }
+    uint8_t mac[6] = {};
+    WiFi.mode(WIFI_STA);
+    WiFi.macAddress(mac);
+    WiFi.mode(WIFI_OFF);
 
-  M5.Power.setBatteryCharge(true);
-  M5.Power.setChargeCurrent(256);
-  M5.Power.setChargeVoltage(4200);
+    nodeId = protocol::nodeIdFromMac(mac);
+    randomSeed(static_cast<uint32_t>(esp_random()));
+    packetIdCounter = static_cast<uint32_t>(random(0x1000, 0xFFFF));
 
-  setupM5Logging();
-  setupLoRaPowerAndRfSwitches();
+    if (!protocol::decodeBase64Key(channelKey, channelKeyBytes)) {
+        hal::display::logError("Channel key decode failed");
+        while (true) delay(1000);
+    }
+    channelHashByte = protocol::computeChannelHash(channelName, channelKeyBytes);
 
-  MeshRadio::Config meshConfig;
-  meshConfig.channelName = channelName;
-  meshConfig.channelKeyBase64 = channelKey;
+    radioHal.setRxCallback(onRadioRx);
+    if (radioHal.begin() != protocol::MeshError::Ok) {
+        hal::display::logError("Radio init failed");
+        while (true) delay(1000);
+    }
 
-  WiFi.mode(WIFI_STA);
-  WiFi.macAddress(meshConfig.macAddress);
-  WiFi.mode(WIFI_OFF);
+    hal::display::logInfo("NodeId: !%08X", nodeId);
+    hal::display::logInfo("Channel: %s", channelName);
+    hal::display::logInfo("Battery: %d%%", M5.Power.getBatteryLevel());
 
-  // LoRa params (must match your Meshtastic preset)
-  meshConfig.frequencyMHz = 869.525F;
-  meshConfig.bandwidthKHz = 250.0F;
-  meshConfig.spreadingFactor = 9;
-  meshConfig.codingRate = 5;
-  meshConfig.syncWord = 0x2B;
-  meshConfig.preambleLength = 16;
-  meshConfig.tcxoVoltage = 1.6F;
-
-  // Max TX power
-  meshConfig.outputPowerDbm = 22;
-  meshConfig.currentLimitmA = 140.0F;
-
-  // Mesh flags
-  meshConfig.hopLimit = 3;
-  meshConfig.wantAck = false;
-  meshConfig.viaMqtt = false;
-  meshConfig.hopStart = 3;
-
-  meshRadio.setTextRxCallback(onTextReceived);
-
-  if (!meshRadio.begin(meshConfig)) {
-    M5.Log(ESP_LOG_ERROR, "meshRadio.begin failed err=%d", meshRadio.getLastError());
-    while (1) delay(1000);
-  }
-
-  M5.Log(ESP_LOG_INFO, "NodeId:  !%08X", meshRadio.getNodeId());
-  M5.Log(ESP_LOG_INFO, "Channel: %s", channelName);
-  M5.Log(ESP_LOG_INFO, "Battery: %d%%", M5.Power.getBatteryLevel());
-  M5.Log(ESP_LOG_INFO, "Canned message: %s", messages[messageIdx]);
-  M5.Log(ESP_LOG_INFO, "");
+    lastActionMs = millis();
 }
 
 void loop() {
-  M5.update();
-  meshRadio.pollRx();
+    M5.update();
+    radioHal.pollRx();
 
-  static uint32_t lastActionMs = 0;
-  const uint32_t nowMs = millis();
-  static bool wasCharging = M5.Power.isCharging();
-  const bool isCharging = M5.Power.isCharging();
+    const uint32_t now = millis();
+    const bool charging = hal::power::isCharging();
 
-  if (wasCharging != isCharging) {
-    wasCharging = isCharging;
-    lastActionMs = nowMs;
-    M5.Display.wakeup();
-  }
-
-  if (M5.Touch.getCount() > 0) {
-    M5.Display.wakeup();
-    lastActionMs = nowMs;
-  }
-
-  if (M5.BtnA.pressedFor(1000)) {
-    powerOff();
-    return;
-  }
-
-  if (nowMs - lastActionMs >= 15000) {
-    sleep();
-    return;
-  }
-
-  if (M5.BtnA.wasDoubleClicked()) {
-    lastActionMs = nowMs;
-    messageIdx += 1;
-
-    if (messageIdx >= messagesSize) {
-      messageIdx = 0;
+    // Detect charge state change
+    const bool chargingChanged = (wasCharging != charging);
+    if (chargingChanged) {
+        wasCharging = charging;
+        lastActionMs = now;
+        if (displaySleeping) {
+            displaySleeping = false;
+            hal::display::wakeup();
+            touchInput.consumeNextTouch();
+        }
+        dirty = true;
     }
 
-    M5.Log(ESP_LOG_INFO, "Canned message:\n%s\n", messages[messageIdx]);
-  } else if (M5.BtnA.wasSingleClicked() && (nowMs - lastActionMs) > 1000) {
-    lastActionMs = nowMs;
+    // Process touch input
+    auto touchEvent = touchInput.update();
 
-    const char* message = messages[messageIdx];
-    const bool ok = meshRadio.txText(message);
+    if (touchEvent.touching) {
+        lastActionMs = now;
 
-    if (ok) {
-      M5.Log(ESP_LOG_INFO, "<< <!%08X>\n%s\n", meshRadio.getNodeId(), message);
-      M5.Speaker.tone(4000, 50);
-    } else {
-      M5.Log(ESP_LOG_ERROR, "TX failed err=%d", meshRadio.getLastError());
+        if (displaySleeping && touchEvent.gesture == hal::TouchGesture::Wake) {
+            displaySleeping = false;
+            displayDimmed = false;
+            hal::display::wakeup();
+            dirty = true;
+        } else if (displayDimmed) {
+            displayDimmed = false;
+            hal::display::brighten();
+        }
     }
-  }
+
+    // Handle touch gestures (only when display is awake)
+    if (!displaySleeping) {
+        switch (touchEvent.gesture) {
+            case hal::TouchGesture::SwipeLeft:
+                cannedMessages.previous();
+                showHint = false;
+                isHolding = false;
+                holdProgress = 0.0f;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::SwipeRight:
+                cannedMessages.next();
+                showHint = false;
+                isHolding = false;
+                holdProgress = 0.0f;
+                dirty = true;
+                break;
+
+            case hal::TouchGesture::HoldTick:
+                if (!showHistory) {
+                    isHolding = true;
+                    holdProgress = touchEvent.holdProgress;
+                    showHint = false;
+                    dirty = true;
+                }
+                break;
+
+            case hal::TouchGesture::HoldComplete:
+                isHolding = false;
+                holdProgress = 0.0f;
+                if (!showHistory) {
+                    showHint = false;
+                    dirty = true;
+                }
+                break;
+
+            case hal::TouchGesture::SwipeDown:
+                if (!showHistory) {
+                    showHistory = true;
+                    dirty = true;
+                }
+                break;
+
+            case hal::TouchGesture::SwipeUp:
+                if (showHistory) {
+                    showHistory = false;
+                    dirty = true;
+                }
+                break;
+
+            case hal::TouchGesture::None:
+                if (!touchEvent.touching && isHolding) {
+                    isHolding = false;
+                    holdProgress = 0.0f;
+                    dirty = true;
+                }
+                break;
+
+            default:
+                break;
+        }
+
+    }
+
+    // Update toast manager
+    if (toastManager.update(now)) {
+        dirty = true;
+    }
+
+    // Sent/error flash timer
+    if (sentFlash || errorFlash) {
+        if (now - flashStartMs >= config::ui::kSentFlashMs) {
+            sentFlash = false;
+            errorFlash = false;
+            dirty = true;
+        }
+    }
+
+    // Read button states once (consumed on first call)
+    const bool singleClick = M5.BtnA.wasSingleClicked();
+    const bool doubleClick = M5.BtnA.wasDoubleClicked();
+    const bool longPress   = M5.BtnA.pressedFor(config::kButtonHoldMs);
+
+    // Physical button activity restores brightness and resets timer
+    if (singleClick || doubleClick) {
+        lastActionMs = now;
+        if (displayDimmed) {
+            displayDimmed = false;
+            hal::display::brighten();
+        }
+    }
+
+    // Gather input events for state machine (BOTH touch AND physical buttons)
+    app::InputEvents events;
+    events.holdComplete    = (touchEvent.gesture == hal::TouchGesture::HoldComplete) && !showHistory;
+    events.singleClick     = singleClick;
+    events.doubleClick     = doubleClick;
+    events.longPress       = longPress;
+    events.touchActive     = touchEvent.touching;
+    events.isCharging      = charging;
+    events.chargingChanged = chargingChanged;
+    events.rxReady         = pendingRx;
+    events.timeSinceLastActionMs = now - lastActionMs;
+
+    // State machine
+    appState = app::nextState(appState, events);
+
+    switch (appState) {
+        case app::State::Transmitting: {
+            lastActionMs = now;
+            const bool success = handleTransmit(now);
+            if (success) {
+                sentFlash = true;
+            } else {
+                errorFlash = true;
+            }
+            flashStartMs = now;
+            dirty = true;
+            appState = app::State::Idle;
+            break;
+        }
+
+        case app::State::Receiving:
+            handleReceive(now);
+            appState = app::State::Idle;
+            break;
+
+        case app::State::EnteringSleep:
+            handleSleep();
+            appState = app::State::Idle;
+            break;
+
+        case app::State::PoweringOff:
+            handlePowerOff();
+            break;
+
+        case app::State::Idle:
+            // Physical button: double click advances message
+            if (events.doubleClick) {
+                lastActionMs = now;
+                cannedMessages.next();
+                showHint = false;
+                dirty = true;
+            }
+            // Physical button: single click resets action timer
+            if (events.singleClick) {
+                lastActionMs = now;
+                showHint = false;
+            }
+            break;
+    }
+
+    // Render if dirty and display is awake
+    if (dirty && !displaySleeping) {
+        renderFrame(now);
+        dirty = false;
+    }
+
+    // Display dimming: reduce brightness after inactivity
+    const uint32_t inactiveMs = now - lastActionMs;
+    if (!displaySleeping && !displayDimmed
+        && inactiveMs >= config::kDimTimeoutMs && inactiveMs < config::kSleepTimeoutMs) {
+        displayDimmed = true;
+        hal::display::dim();
+    }
+
+    // Idle delay: let CPU enter light sleep between loop iterations
+    if (!dirty) {
+        delay(config::kLoopIdleDelayMs);
+    }
 }

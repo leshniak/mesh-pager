@@ -1,4 +1,5 @@
 #include "hal/Display.h"
+#include "config/AppConfig.h"
 
 #include <M5Unified.h>
 #include <cstdarg>
@@ -8,7 +9,7 @@ namespace mesh::hal::display {
 
 void init() {
     M5.Display.setRotation(0);  // Portrait
-    M5.Display.setBrightness(80);
+    M5.Display.setBrightness(config::kBrightnessActive);
     M5.Display.fillScreen(TFT_BLACK);
 }
 
@@ -19,6 +20,15 @@ void sleep() {
 
 void wakeup() {
     M5.Display.wakeup();
+    M5.Display.setBrightness(config::kBrightnessActive);
+}
+
+void dim() {
+    M5.Display.setBrightness(config::kBrightnessDim);
+}
+
+void brighten() {
+    M5.Display.setBrightness(config::kBrightnessActive);
 }
 
 void logInfo(const char* fmt, ...) {

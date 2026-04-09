@@ -11,8 +11,14 @@ void init();
 /// Turn off display backlight, enter low-power mode.
 void sleep();
 
-/// Wake display from sleep.
+/// Wake display from sleep at full brightness.
 void wakeup();
+
+/// Reduce backlight brightness for power saving.
+void dim();
+
+/// Restore full brightness from dimmed state.
+void brighten();
 
 /// Serial-only informational log (no longer draws to display).
 void logInfo(const char* fmt, ...) __attribute__((format(printf, 1, 2)));

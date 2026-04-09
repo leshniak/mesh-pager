@@ -46,6 +46,7 @@ size_t rxFrameLen = 0;
 // UI state
 bool dirty = true;
 bool displaySleeping = false;
+bool displayDimmed = false;
 bool showHistory = false;
 bool showHint = true;
 
@@ -131,6 +132,7 @@ void handleReceive(uint32_t now) {
 
 void handleSleep() {
     displaySleeping = true;
+    displayDimmed = false;
     hal::display::sleep();
     touchInput.consumeNextTouch();
 
@@ -179,6 +181,7 @@ void setup() {
 
     M5.Imu.sleep();
     M5.Power.setExtOutput(false);
+    setCpuFrequencyMhz(config::kCpuFreqMHz);  // 80MHz saves ~25% power vs 160MHz
 
     hal::power::init();
     hal::display::init();
@@ -244,8 +247,12 @@ void loop() {
 
         if (displaySleeping && touchEvent.gesture == hal::TouchGesture::Wake) {
             displaySleeping = false;
+            displayDimmed = false;
             hal::display::wakeup();
             dirty = true;
+        } else if (displayDimmed) {
+            displayDimmed = false;
+            hal::display::brighten();
         }
     }
 
@@ -321,12 +328,26 @@ void loop() {
         }
     }
 
+    // Read button states once (consumed on first call)
+    const bool singleClick = M5.BtnA.wasSingleClicked();
+    const bool doubleClick = M5.BtnA.wasDoubleClicked();
+    const bool longPress   = M5.BtnA.pressedFor(config::kButtonHoldMs);
+
+    // Physical button activity restores brightness and resets timer
+    if (singleClick || doubleClick) {
+        lastActionMs = now;
+        if (displayDimmed) {
+            displayDimmed = false;
+            hal::display::brighten();
+        }
+    }
+
     // Gather input events for state machine (BOTH touch AND physical buttons)
     app::InputEvents events;
     events.holdComplete    = (touchEvent.gesture == hal::TouchGesture::HoldComplete);
-    events.singleClick     = M5.BtnA.wasSingleClicked();
-    events.doubleClick     = M5.BtnA.wasDoubleClicked();
-    events.longPress       = M5.BtnA.pressedFor(config::kButtonHoldMs);
+    events.singleClick     = singleClick;
+    events.doubleClick     = doubleClick;
+    events.longPress       = longPress;
     events.touchActive     = touchEvent.touching;
     events.isCharging      = charging;
     events.chargingChanged = chargingChanged;
@@ -385,5 +406,18 @@ void loop() {
     if (dirty && !displaySleeping) {
         renderFrame(now);
         dirty = false;
+    }
+
+    // Display dimming: reduce brightness after inactivity
+    const uint32_t inactiveMs = now - lastActionMs;
+    if (!displaySleeping && !displayDimmed
+        && inactiveMs >= config::kDimTimeoutMs && inactiveMs < config::kSleepTimeoutMs) {
+        displayDimmed = true;
+        hal::display::dim();
+    }
+
+    // Idle delay: let CPU enter light sleep between loop iterations
+    if (!dirty) {
+        delay(config::kLoopIdleDelayMs);
     }
 }

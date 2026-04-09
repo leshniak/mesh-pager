@@ -48,7 +48,9 @@ private:
     void drawMessageCard(const RenderState& state, int16_t top, int16_t bottom);
     void drawPageDots(int16_t cx, int16_t y, uint8_t count, uint8_t active);
     void drawCenteredText(const char* text, int16_t cx, int16_t cy,
-                          int16_t maxWidth, uint16_t color);
+                          int16_t maxWidth, int16_t maxHeight, uint16_t color);
+    void drawTruncated(const char* text, int16_t x, int16_t y,
+                       int16_t maxWidth, uint16_t color);
     void drawHistory(const RenderState& state, int16_t top);
 };
 

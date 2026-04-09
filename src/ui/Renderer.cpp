@@ -88,9 +88,10 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
     sprite_.setTextDatum(top_left);
     sprite_.drawString(senderBuf, toastX + kToastPadding, toastY + kToastPadding);
 
-    sprite_.setTextColor(kColorToastText);
-    sprite_.drawString(toast.text, toastX + kToastPadding,
-                       toastY + kToastPadding + lineH + 2);
+    sprite_.setTextDatum(top_left);
+    drawTruncated(toast.text, toastX + kToastPadding,
+                  toastY + kToastPadding + lineH + 2,
+                  toastW - 2 * kToastPadding, kColorToastText);
 
     const int16_t timerW = static_cast<int16_t>((1.0f - progress) * toastW);
     if (timerW > 0) {
@@ -130,7 +131,7 @@ void Renderer::drawMessageCard(const RenderState& state, int16_t top, int16_t bo
         sprite_.setTextDatum(top_center);
         sprite_.drawString("swipe | hold",
                            kScreenWidth / 2, contentTop);
-        contentTop += sprite_.fontHeight() + 2;
+        contentTop += sprite_.fontHeight() + 5;
     }
 
     // Channel name
@@ -144,10 +145,11 @@ void Renderer::drawMessageCard(const RenderState& state, int16_t top, int16_t bo
     const int16_t dotsCenter = cardY + cardH - kCardPadding - kDotRadius;
     const int16_t textCenterY = contentTop + (dotsCenter - kDotRadius - 4 - contentTop) / 2;
 
+    const int16_t textMaxH = dotsCenter - kDotRadius - 4 - contentTop;
     sprite_.setTextSize(2);
     drawCenteredText(state.messageText ? state.messageText : "",
                      kScreenWidth / 2, textCenterY,
-                     cardW - 2 * kCardPadding, textColor);
+                     cardW - 2 * kCardPadding, textMaxH, textColor);
 
     drawPageDots(kScreenWidth / 2, dotsCenter, state.messageCount, state.messageIndex);
 
@@ -172,12 +174,35 @@ void Renderer::drawPageDots(int16_t cx, int16_t y, uint8_t count, uint8_t active
     }
 }
 
+void Renderer::drawTruncated(const char* text, int16_t x, int16_t y,
+                             int16_t maxWidth, uint16_t color) {
+    sprite_.setTextColor(color);
+    if (sprite_.textWidth(text) <= maxWidth) {
+        sprite_.drawString(text, x, y);
+        return;
+    }
+    char buf[128];
+    size_t len = strlen(text);
+    if (len >= sizeof(buf) - 1) len = sizeof(buf) - 4;
+    memcpy(buf, text, len);
+    buf[len] = '\0';
+    while (len > 0) {
+        buf[len] = '\0';
+        buf[len > 0 ? len - 1 : 0] = '.';
+        if (len > 1) buf[len - 2] = '.';
+        if (sprite_.textWidth(buf) <= maxWidth) break;
+        --len;
+    }
+    sprite_.drawString(buf, x, y);
+}
+
 void Renderer::drawCenteredText(const char* text, int16_t cx, int16_t cy,
-                                int16_t maxWidth, uint16_t color) {
+                                int16_t maxWidth, int16_t maxHeight,
+                                uint16_t color) {
     sprite_.setTextColor(color);
     sprite_.setTextDatum(middle_center);
 
-    // Auto-reduce text size if too wide (largest font that fits)
+    // Auto-reduce text size if too wide for a single line
     if (sprite_.textWidth(text) > maxWidth) {
         sprite_.setTextSize(1.5f);
         if (sprite_.textWidth(text) > maxWidth) {
@@ -185,30 +210,61 @@ void Renderer::drawCenteredText(const char* text, int16_t cx, int16_t cy,
         }
     }
 
-    const char* lineStart = text;
     const int16_t lineHeight = sprite_.fontHeight();
-    int lineCount = 1;
+    const int maxLines = (maxHeight > 0) ? (maxHeight / lineHeight) : 8;
 
-    for (const char* p = text; *p; ++p) {
-        if (*p == '\n') ++lineCount;
+    // Word-wrap into lines
+    char lines[8][32];
+    int lineCount = 0;
+    const char* p = text;
+
+    while (*p && lineCount < maxLines) {
+        // Skip leading spaces
+        while (*p == ' ') ++p;
+        if (!*p) break;
+
+        // Find how many chars fit on this line
+        size_t bestBreak = 0;
+        char probe[128];
+        size_t i = 0;
+        for (; p[i] && i < sizeof(probe) - 1; ++i) {
+            if (p[i] == '\n') { bestBreak = i; break; }
+            probe[i] = p[i];
+            probe[i + 1] = '\0';
+            if (sprite_.textWidth(probe) <= maxWidth) {
+                if (p[i] == ' ' || p[i + 1] == '\0' || p[i + 1] == ' ')
+                    bestBreak = i + 1;
+            } else {
+                break;
+            }
+        }
+
+        if (bestBreak == 0) bestBreak = (i > 0) ? i : 1;
+
+        size_t copyLen = bestBreak;
+        if (copyLen >= sizeof(lines[0])) copyLen = sizeof(lines[0]) - 1;
+
+        // If this is the last allowed line and there's more text, truncate with ..
+        if (lineCount == maxLines - 1 && p[bestBreak] != '\0' && p[bestBreak] != '\n') {
+            memcpy(lines[lineCount], p, copyLen);
+            lines[lineCount][copyLen] = '\0';
+            if (copyLen >= 2) {
+                lines[lineCount][copyLen - 1] = '.';
+                lines[lineCount][copyLen - 2] = '.';
+            }
+        } else {
+            memcpy(lines[lineCount], p, copyLen);
+            lines[lineCount][copyLen] = '\0';
+        }
+
+        ++lineCount;
+        p += bestBreak;
+        if (*p == '\n') ++p;
     }
 
     int16_t startY = cy - (lineCount - 1) * lineHeight / 2;
-
-    char lineBuf[128];
-    int currentLine = 0;
-    for (const char* p = text; ; ++p) {
-        if (*p == '\n' || *p == '\0') {
-            const size_t len = static_cast<size_t>(p - lineStart);
-            if (len < sizeof(lineBuf)) {
-                memcpy(lineBuf, lineStart, len);
-                lineBuf[len] = '\0';
-                sprite_.drawString(lineBuf, cx, startY + currentLine * lineHeight);
-            }
-            ++currentLine;
-            lineStart = p + 1;
-            if (*p == '\0') break;
-        }
+    for (int i = 0; i < lineCount; ++i) {
+        sprite_.drawString(lines[i], cx, startY + i * lineHeight);
     }
 }
 
@@ -253,9 +309,9 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
         sprite_.drawString(timeBuf, kScreenWidth - kPad, y);
 
         y += kSenderRowH;
-        sprite_.setTextColor(kColorTextPrimary);
         sprite_.setTextDatum(top_left);
-        sprite_.drawString(entry.text, kPad, y);
+        drawTruncated(entry.text, kPad, y,
+                      kScreenWidth - 2 * kPad, kColorTextPrimary);
 
         y += kTextRowH;
 

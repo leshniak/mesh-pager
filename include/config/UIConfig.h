@@ -54,9 +54,9 @@ inline constexpr uint16_t kColorTextPrimary   = rgb565(0xff, 0xff, 0xff);
 inline constexpr uint16_t kColorTextDim       = rgb565(0x48, 0x4f, 0x58);
 inline constexpr uint16_t kColorToast         = rgb565(0x1f, 0x6f, 0xeb);
 inline constexpr uint16_t kColorToastText     = rgb565(0xff, 0xff, 0xff);
-inline constexpr uint16_t kColorSendGreen     = rgb565(0x23, 0x86, 0x36);
-inline constexpr uint16_t kColorSendTextGreen = rgb565(0x7e, 0xe7, 0x87);
-inline constexpr uint16_t kColorSentFlash     = rgb565(0x0f, 0x3d, 0x1a);
+inline constexpr uint16_t kColorSendGreen     = rgb565(0x2a, 0x82, 0x8f);
+inline constexpr uint16_t kColorSendTextGreen = rgb565(0x7e, 0xd4, 0xdf);
+inline constexpr uint16_t kColorSentFlash     = rgb565(0x0e, 0x2e, 0x34);
 inline constexpr uint16_t kColorError         = rgb565(0xda, 0x36, 0x33);
 
 }  // namespace mesh::config::ui

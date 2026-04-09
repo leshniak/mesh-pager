@@ -2,22 +2,14 @@
 
 #include <M5Unified.h>
 #include <cstdarg>
+#include <cstdio>
 
 namespace mesh::hal::display {
 
 void init() {
-    M5.setLogDisplayIndex(0);
-    M5.Display.setTextWrap(true, true);
-    M5.Display.setTextScroll(true);
-
-    M5.Log.setLogLevel(m5::log_target_serial, ESP_LOG_VERBOSE);
-    M5.Log.setLogLevel(m5::log_target_display, ESP_LOG_DEBUG);
-
-    M5.Log.setEnableColor(m5::log_target_serial, false);
-    M5.Log.setEnableColor(m5::log_target_display, true);
-
-    M5.Log.setSuffix(m5::log_target_serial, "\n");
-    M5.Log.setSuffix(m5::log_target_display, "\n");
+    M5.Display.setRotation(0);  // Portrait
+    M5.Display.setBrightness(80);
+    M5.Display.fillScreen(TFT_BLACK);
 }
 
 void sleep() {
@@ -35,7 +27,7 @@ void logInfo(const char* fmt, ...) {
     char buf[256];
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    M5.Log(ESP_LOG_INFO, "%s", buf);
+    Serial.printf("[INFO] %s\n", buf);
 }
 
 void logError(const char* fmt, ...) {
@@ -44,7 +36,7 @@ void logError(const char* fmt, ...) {
     char buf[256];
     vsnprintf(buf, sizeof(buf), fmt, args);
     va_end(args);
-    M5.Log(ESP_LOG_ERROR, "%s", buf);
+    Serial.printf("[ERROR] %s\n", buf);
 }
 
 }  // namespace mesh::hal::display

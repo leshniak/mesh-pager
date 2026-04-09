@@ -1,21 +1,23 @@
 #pragma once
 
-#include <string_view>
+#include <cstdarg>
 
 namespace mesh::hal {
-
-/// Thin display abstraction. Current implementation uses M5.Display + M5.Log.
-/// Future touch UI replaces this file only.
 namespace display {
 
+/// Initialize display hardware (brightness, orientation).
 void init();
+
+/// Turn off display backlight, enter low-power mode.
 void sleep();
+
+/// Wake display from sleep.
 void wakeup();
 
-/// Log an informational message to display + serial.
+/// Serial-only informational log (no longer draws to display).
 void logInfo(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
-/// Log an error message to display + serial.
+/// Serial-only error log (no longer draws to display).
 void logError(const char* fmt, ...) __attribute__((format(printf, 1, 2)));
 
 }  // namespace display

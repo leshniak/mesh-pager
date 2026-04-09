@@ -63,7 +63,7 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
         return MeshError::DecodeFailed;
     }
 
-    if (port != static_cast<uint8_t>(PortNum::TextMessage) || !payload || payloadLen == 0) {
+    if (port != static_cast<uint32_t>(PortNum::TextMessage) || !payload || payloadLen == 0) {
         // Not a text message — not an error, just nothing to extract
         return MeshError::Ok;
     }

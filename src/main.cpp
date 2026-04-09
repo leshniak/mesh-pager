@@ -179,8 +179,11 @@ void loop() {
     const uint32_t now = millis();
     const bool charging = hal::power::isCharging();
 
+    // Detect charge state change before updating wasCharging
+    const bool chargingChanged = (wasCharging != charging);
+
     // Reset activity timer on charge state change or touch
-    if (wasCharging != charging) {
+    if (chargingChanged) {
         wasCharging = charging;
         lastActionMs = now;
         hal::display::wakeup();
@@ -197,7 +200,7 @@ void loop() {
     events.longPress     = M5.BtnA.pressedFor(config::kButtonHoldMs);
     events.touchActive   = M5.Touch.getCount() > 0;
     events.isCharging    = charging;
-    events.chargingChanged = (wasCharging != charging);
+    events.chargingChanged = chargingChanged;
     events.rxReady       = pendingRx;
     events.timeSinceLastActionMs = now - lastActionMs;
 

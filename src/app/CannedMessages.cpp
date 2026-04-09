@@ -28,7 +28,6 @@ std::string_view CannedMessages::current() const {
 void CannedMessages::next() {
     if (count_ == 0) return;
     index_ = static_cast<uint8_t>((index_ + 1) % count_);
-    save();
 }
 
 void CannedMessages::save() {

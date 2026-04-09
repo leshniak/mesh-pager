@@ -14,13 +14,11 @@ inline constexpr int16_t kStatusBarHeight = 18;
 
 // --- Message card ---
 inline constexpr int16_t kCardMargin  = 6;
-inline constexpr int16_t kCardRadius  = 8;
 inline constexpr int16_t kCardPadding = 10;
 
 // --- Page dots ---
 inline constexpr int16_t kDotRadius   = 3;
 inline constexpr int16_t kDotSpacing  = 11;
-inline constexpr int16_t kDotMarginTop = 10;
 
 // --- Send progress bar ---
 inline constexpr int16_t kProgressBarHeight = 4;
@@ -29,7 +27,6 @@ inline constexpr int16_t kProgressBarHeight = 4;
 inline constexpr int16_t kToastMarginH     = 6;
 inline constexpr int16_t kToastMarginTop    = 3;
 inline constexpr int16_t kToastPadding      = 6;
-inline constexpr int16_t kToastRadius       = 6;
 inline constexpr int16_t kToastTimerHeight  = 2;
 
 // --- Timing ---

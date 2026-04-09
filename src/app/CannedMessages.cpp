@@ -30,6 +30,11 @@ void CannedMessages::next() {
     index_ = static_cast<uint8_t>((index_ + 1) % count_);
 }
 
+void CannedMessages::previous() {
+    if (count_ == 0) return;
+    index_ = static_cast<uint8_t>((index_ + count_ - 1) % count_);
+}
+
 void CannedMessages::save() {
     prefs.begin(config::kAppName, false);
     if (index_ != prefs.getUChar(config::kMsgIndexKey, 0xFF)) {

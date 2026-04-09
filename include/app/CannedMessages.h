@@ -17,6 +17,9 @@ public:
     /// Advance to the next message (wraps around). Persists index.
     void next();
 
+    /// Go back to the previous message (wraps around).
+    void previous();
+
     /// Number of messages.
     size_t count() const { return count_; }
 

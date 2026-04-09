@@ -10,9 +10,10 @@ enum class TouchGesture : uint8_t {
     None,
     SwipeLeft,
     SwipeRight,
+    SwipeDown,
+    SwipeUp,
     HoldTick,
     HoldComplete,
-    StatusBarTap,
     Wake,
 };
 
@@ -46,6 +47,7 @@ private:
 
     GestureState state_ = GestureState::Idle;
     int16_t startX_ = 0;
+    int16_t startY_ = 0;
     uint32_t startMs_ = 0;
     bool consumeNextTouch_ = false;
 };

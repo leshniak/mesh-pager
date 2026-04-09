@@ -28,9 +28,8 @@ bool ToastManager::update(uint32_t nowMs) {
 
     if (nowMs - toastStartMs_ >= config::ui::kToastDurationMs) {
         toastActive_ = false;
-        return true;
     }
-    return false;
+    return true;  // always redraw while toast is visible (progress bar animates)
 }
 
 const HistoryEntry& ToastManager::activeToast() const {

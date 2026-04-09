@@ -39,19 +39,30 @@ void Renderer::drawStatusBar(const RenderState& state, int16_t y) {
     sprite_.fillRect(0, y, kScreenWidth, kStatusBarHeight, kColorStatusBar);
     sprite_.drawFastHLine(0, y + kStatusBarHeight - 1, kScreenWidth, kColorCardBorder);
 
-    sprite_.setTextDatum(middle_left);
     sprite_.setTextSize(1);
 
-    sprite_.setTextColor(kColorAccentBlue);
-    sprite_.drawString(state.channelName ? state.channelName : "",
-                       4, y + kStatusBarHeight / 2);
-
-    char rightBuf[24];
-    snprintf(rightBuf, sizeof(rightBuf), "!%08X %d%%",
-             state.nodeId, state.batteryPercent);
+    char idBuf[12];
+    snprintf(idBuf, sizeof(idBuf), "!%08X", state.nodeId);
     sprite_.setTextColor(kColorStatusText);
+    sprite_.setTextDatum(middle_left);
+    sprite_.drawString(idBuf, 4, y + kStatusBarHeight / 2);
+
+    // Battery icon (small rect outline + nub) + percentage
+    const int16_t batW = 12, batH = 7, nubW = 2, nubH = 3;
+    const int16_t batX = kScreenWidth - 4 - batW;
+    const int16_t batY = y + (kStatusBarHeight - batH) / 2;
+    sprite_.drawRect(batX, batY, batW, batH, kColorStatusText);
+    sprite_.fillRect(batX - nubW, batY + (batH - nubH) / 2, nubW, nubH, kColorStatusText);
+    const int16_t fillW = static_cast<int16_t>((batW - 2) * state.batteryPercent / 100);
+    uint16_t batColor = (state.batteryPercent > 20) ? kColorSendGreen : kColorError;
+    if (fillW > 0) {
+        sprite_.fillRect(batX + 1, batY + 1, fillW, batH - 2, batColor);
+    }
+
+    char pctBuf[6];
+    snprintf(pctBuf, sizeof(pctBuf), "%d%%", state.batteryPercent);
     sprite_.setTextDatum(middle_right);
-    sprite_.drawString(rightBuf, kScreenWidth - 4, y + kStatusBarHeight / 2);
+    sprite_.drawString(pctBuf, batX - nubW - 2, y + kStatusBarHeight / 2);
 }
 
 void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) {
@@ -69,7 +80,7 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
     const int16_t lineH = sprite_.fontHeight();
     const int16_t toastH = kToastPadding + lineH + 2 + lineH + kToastPadding + kToastTimerHeight;
 
-    sprite_.fillRoundRect(toastX, toastY, toastW, toastH, kToastRadius, kColorToast);
+    sprite_.fillRect(toastX, toastY, toastW, toastH, kColorToast);
 
     char senderBuf[16];
     snprintf(senderBuf, sizeof(senderBuf), "!%08X", toast.sender);
@@ -81,11 +92,9 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
     sprite_.drawString(toast.text, toastX + kToastPadding,
                        toastY + kToastPadding + lineH + 2);
 
-    const int16_t timerW = static_cast<int16_t>(
-        (1.0f - progress) * (toastW - 2 * kToastRadius));
+    const int16_t timerW = static_cast<int16_t>((1.0f - progress) * toastW);
     if (timerW > 0) {
-        sprite_.fillRect(toastX + kToastRadius,
-                         toastY + toastH - kToastTimerHeight,
+        sprite_.fillRect(toastX, toastY + toastH - kToastTimerHeight,
                          timerW, kToastTimerHeight,
                          rgb565(0xff, 0xff, 0xff));
     }
@@ -102,43 +111,50 @@ void Renderer::drawMessageCard(const RenderState& state, int16_t top, int16_t bo
     uint16_t bgColor = kColorCardBg;
     if (state.sentFlash) bgColor = kColorSentFlash;
     else if (state.errorFlash) bgColor = kColorError;
-    sprite_.fillRoundRect(cardX, cardY, cardW, cardH, kCardRadius, bgColor);
+    sprite_.fillRect(cardX, cardY, cardW, cardH, bgColor);
 
     uint16_t borderColor = kColorCardBorder;
     if (state.isHolding) borderColor = kColorSendGreen;
     else if (state.sentFlash) borderColor = kColorSendGreen;
-    sprite_.drawRoundRect(cardX, cardY, cardW, cardH, kCardRadius, borderColor);
+    sprite_.drawRect(cardX, cardY, cardW, cardH, borderColor);
 
     uint16_t textColor = kColorTextPrimary;
     if (state.isHolding) textColor = kColorSendTextGreen;
 
-    const int16_t dotsY = cardY + cardH - kCardMargin - kDotRadius * 2
-                          - (state.showHint ? 16 : 0)
-                          - kProgressBarHeight;
-    const int16_t textCenterY = cardY + (dotsY - cardY) / 2;
+    // Layout top-down: hint (optional), channel, centered text, dots at bottom
+    int16_t contentTop = cardY + kCardPadding;
+
+    if (state.showHint) {
+        sprite_.setTextSize(1);
+        sprite_.setTextColor(kColorTextDim);
+        sprite_.setTextDatum(top_center);
+        sprite_.drawString("swipe | hold",
+                           kScreenWidth / 2, contentTop);
+        contentTop += sprite_.fontHeight() + 2;
+    }
+
+    // Channel name
+    sprite_.setTextSize(1);
+    sprite_.setTextColor(kColorAccentBlue);
+    sprite_.setTextDatum(top_center);
+    sprite_.drawString(state.channelName ? state.channelName : "",
+                       kScreenWidth / 2, contentTop);
+    contentTop += sprite_.fontHeight() + 4;
+
+    const int16_t dotsCenter = cardY + cardH - kCardPadding - kDotRadius;
+    const int16_t textCenterY = contentTop + (dotsCenter - kDotRadius - 4 - contentTop) / 2;
 
     sprite_.setTextSize(2);
     drawCenteredText(state.messageText ? state.messageText : "",
                      kScreenWidth / 2, textCenterY,
                      cardW - 2 * kCardPadding, textColor);
 
-    const int16_t dotsBaseline = dotsY + kDotMarginTop;
-    drawPageDots(kScreenWidth / 2, dotsBaseline, state.messageCount, state.messageIndex);
-
-    if (state.showHint) {
-        sprite_.setTextSize(1);
-        sprite_.setTextColor(kColorTextDim);
-        sprite_.setTextDatum(top_center);
-        sprite_.drawString("swipe - hold to send",
-                           kScreenWidth / 2, dotsBaseline + kDotRadius * 2 + 6);
-    }
+    drawPageDots(kScreenWidth / 2, dotsCenter, state.messageCount, state.messageIndex);
 
     if (state.isHolding && state.holdProgress > 0.0f) {
-        const int16_t barY = cardY + cardH - kProgressBarHeight;
-        const int16_t maxBarW = cardW - 2 * kCardRadius;
-        const int16_t barW = static_cast<int16_t>(state.holdProgress * maxBarW);
+        const int16_t barW = static_cast<int16_t>(state.holdProgress * cardW);
         if (barW > 0) {
-            sprite_.fillRect(cardX + kCardRadius, barY, barW, kProgressBarHeight, kColorSendGreen);
+            sprite_.fillRect(cardX, cardY, barW, kProgressBarHeight, kColorSendGreen);
         }
     }
 }
@@ -251,7 +267,7 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
 
     sprite_.setTextColor(kColorTextDim);
     sprite_.setTextDatum(top_center);
-    sprite_.drawString("tap to close", kScreenWidth / 2, y + 2);
+    sprite_.drawString("swipe up to close", kScreenWidth / 2, y + 2);
 }
 
 }  // namespace mesh::ui

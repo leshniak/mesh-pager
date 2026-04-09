@@ -276,22 +276,35 @@ void loop() {
                 break;
 
             case hal::TouchGesture::HoldTick:
-                isHolding = true;
-                holdProgress = touchEvent.holdProgress;
-                showHint = false;
-                dirty = true;
+                if (!showHistory) {
+                    isHolding = true;
+                    holdProgress = touchEvent.holdProgress;
+                    showHint = false;
+                    dirty = true;
+                }
                 break;
 
             case hal::TouchGesture::HoldComplete:
                 isHolding = false;
                 holdProgress = 0.0f;
-                showHint = false;
-                dirty = true;
+                if (!showHistory) {
+                    showHint = false;
+                    dirty = true;
+                }
                 break;
 
-            case hal::TouchGesture::StatusBarTap:
-                showHistory = !showHistory;
-                dirty = true;
+            case hal::TouchGesture::SwipeDown:
+                if (!showHistory) {
+                    showHistory = true;
+                    dirty = true;
+                }
+                break;
+
+            case hal::TouchGesture::SwipeUp:
+                if (showHistory) {
+                    showHistory = false;
+                    dirty = true;
+                }
                 break;
 
             case hal::TouchGesture::None:
@@ -306,12 +319,6 @@ void loop() {
                 break;
         }
 
-        // Close history on any card area touch
-        if (showHistory && touchEvent.touching
-            && touchEvent.gesture != hal::TouchGesture::StatusBarTap) {
-            showHistory = false;
-            dirty = true;
-        }
     }
 
     // Update toast manager
@@ -344,7 +351,7 @@ void loop() {
 
     // Gather input events for state machine (BOTH touch AND physical buttons)
     app::InputEvents events;
-    events.holdComplete    = (touchEvent.gesture == hal::TouchGesture::HoldComplete);
+    events.holdComplete    = (touchEvent.gesture == hal::TouchGesture::HoldComplete) && !showHistory;
     events.singleClick     = singleClick;
     events.doubleClick     = doubleClick;
     events.longPress       = longPress;

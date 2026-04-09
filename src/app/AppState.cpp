@@ -23,7 +23,7 @@ State nextState(State current, const InputEvents& events) {
         return State::Transmitting;
     }
 
-    if (events.singleClick && events.timeSinceLastActionMs > config::kDebounceGuardMs) {
+    if (events.singleClick) {
         return State::Transmitting;
     }
 

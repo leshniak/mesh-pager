@@ -14,9 +14,17 @@ void TouchInput::init() {
 TouchEvent TouchInput::processHoldOrSwipe(const m5::touch_detail_t& t, uint32_t now) {
     TouchEvent event;
     const int16_t dx = t.x - startX_;
+    const int16_t dy = t.y - startY_;
+    const auto absDx = std::abs(static_cast<int32_t>(dx));
+    const auto absDy = std::abs(static_cast<int32_t>(dy));
+    const auto threshold = static_cast<int32_t>(config::ui::kSwipeThresholdPx);
 
-    if (std::abs(static_cast<int32_t>(dx)) > static_cast<int32_t>(config::ui::kSwipeThresholdPx)) {
-        event.gesture = (dx > 0) ? TouchGesture::SwipeRight : TouchGesture::SwipeLeft;
+    if (absDx > threshold || absDy > threshold) {
+        if (absDy > absDx) {
+            event.gesture = (dy > 0) ? TouchGesture::SwipeDown : TouchGesture::SwipeUp;
+        } else {
+            event.gesture = (dx > 0) ? TouchGesture::SwipeRight : TouchGesture::SwipeLeft;
+        }
         state_ = GestureState::Swiping;
         return event;
     }
@@ -62,13 +70,8 @@ TouchEvent TouchInput::update() {
                 return event;
             }
 
-            if (t.y < config::ui::kStatusBarHeight) {
-                event.gesture = TouchGesture::StatusBarTap;
-                state_ = GestureState::Cooldown;
-                return event;
-            }
-
             startX_ = t.x;
+            startY_ = t.y;
             startMs_ = now;
             state_ = GestureState::Tracking;
             break;

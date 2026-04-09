@@ -6,7 +6,7 @@ namespace mesh::app {
 State nextState(State current, const InputEvents& events) {
     if (current != State::Idle) return current;
 
-    // Priority: power off > sleep timeout > hold-to-send > rx
+    // Priority: power off > sleep timeout > transmit > rx
     if (events.longPress) {
         return State::PoweringOff;
     }
@@ -15,7 +15,15 @@ State nextState(State current, const InputEvents& events) {
         return State::EnteringSleep;
     }
 
+    if (events.doubleClick) {
+        return State::Idle;  // message advance handled by caller
+    }
+
     if (events.holdComplete) {
+        return State::Transmitting;
+    }
+
+    if (events.singleClick && events.timeSinceLastActionMs > config::kDebounceGuardMs) {
         return State::Transmitting;
     }
 

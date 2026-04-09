@@ -13,6 +13,8 @@ enum class State : uint8_t {
 };
 
 struct InputEvents {
+    bool singleClick     = false;  // physical button single click (transmit)
+    bool doubleClick     = false;  // physical button double click (next message)
     bool holdComplete    = false;  // touch hold-to-send reached 1000ms
     bool longPress       = false;  // KEY1 physical button hold (power off)
     bool touchActive     = false;

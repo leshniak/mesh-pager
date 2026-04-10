@@ -365,13 +365,20 @@ void loop() {
         dirty = true;
     }
 
-    // ── 2. Stay-awake standby: wake display on button press ────────────────
-    // RX wake is handled in handleReceive() — only valid messages wake the screen.
-    if (displaySleeping && stayAwake && M5.BtnA.wasClicked()) {
-        displaySleeping = false;
-        lastActionMs = now;
-        hal::display::wakeup();
-        dirty = true;
+    // ── 2. Stay-awake standby ──────────────────────────────────────────────
+    // In standby the sleep timeout is permanently exceeded, so the state machine
+    // would keep returning EnteringSleep and never reach Receiving. Process RX
+    // and button wake directly here, before the state machine runs.
+    if (displaySleeping && stayAwake) {
+        if (pendingRx) {
+            handleReceive(now);  // Wakes display only on valid channel messages
+        }
+        if (M5.BtnA.wasClicked()) {
+            displaySleeping = false;
+            lastActionMs = now;
+            hal::display::wakeup();
+            dirty = true;
+        }
     }
 
     // ── 3. Process touch input ──────────────────────────────────────────────

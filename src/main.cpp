@@ -194,18 +194,22 @@ void handleReceive(uint32_t now) {
 ///   - **If stay-awake lock**: display off, radio stays active (wake on RX or button).
 ///   - **Otherwise**: full deep sleep (radio off, wake on KEY1 button press only).
 void handleSleep() {
+    if (displaySleeping) return;  // Already asleep — avoid re-entering on every loop
+
     displaySleeping = true;
-    hal::display::sleep();
     touchInput.consumeNextTouch();  // Next touch = wake, not action
 
-    if (hal::power::isCharging()) return;  // Display off only — USB keeps MCU alive
-    if (stayAwake) return;                 // Display off, radio stays on — standby mode
+    if (hal::power::isCharging() || stayAwake) {
+        hal::display::sleep();    // Display off only — MCU and radio stay alive
+        return;
+    }
 
-    // Full deep sleep path
+    // Full deep sleep path — play tone while hardware is still active
     cannedMessages.save();        // Persist selected message index to NVS
     radioHal.sleep();             // Power down SX1262
     hal::power::ledOff();         // Turn off LED
     hal::playSleepTone();         // Audio feedback: two beeps
+    hal::display::sleep();        // Display off last (after tone)
     hal::power::enterDeepSleep(); // Never returns — reboots on wake
 }
 
@@ -490,11 +494,11 @@ void loop() {
     // After kStayAwakeMaxMs (10 min), force deep sleep with audio warning.
     if (stayAwake && (now - stayAwakeStartMs) >= config::kStayAwakeMaxMs) {
         stayAwake = false;
-        hal::display::sleep();
         cannedMessages.save();
         radioHal.sleep();
         hal::power::ledOff();
         hal::playSleepTone();
+        hal::display::sleep();
         hal::power::enterDeepSleep();  // Never returns
     }
 

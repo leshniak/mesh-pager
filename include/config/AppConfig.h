@@ -25,23 +25,22 @@ inline constexpr uint8_t  kCpuFreqMHz        = 80;    ///< CPU clock (reduced fr
 inline constexpr uint8_t  kLoopIdleDelayMs   = 10;    ///< delay() in idle loop — lets CPU enter automatic light sleep
 
 // ── Buzzer tones ────────────────────────────────────────────────────────────
-// Single-frequency square-wave tones played through the onboard piezo buzzer
-// via M5.Speaker.tone(). Higher pitch = more attention-getting.
+// Square-wave tones via M5.Speaker.tone(). Frequencies are musical notes
+// from the C major scale (C7–A7 range, where small piezo buzzers are loudest).
 
-inline constexpr uint16_t kTxToneHz          = 4000;  ///< Transmit confirmation beep (single pulse)
-inline constexpr uint16_t kRxToneHz          = 6000;  ///< Receive notification beep (single pulse)
+inline constexpr uint16_t kTxToneHz          = 2637;  ///< Transmit confirmation — E7
+inline constexpr uint16_t kRxToneHz          = 3520;  ///< Receive notification — A7
 inline constexpr uint16_t kToneDurationMs    = 50;    ///< Duration for TX/RX single-pulse tones
 
-/// Sleep tone: two identical beeps with a gap (descending feel due to repetition).
-inline constexpr uint16_t kSleepToneHz       = 2500;
+/// Sleep tone: two gentle beeps — G6, signalling wind-down.
+inline constexpr uint16_t kSleepToneHz       = 1568;  ///< G6
 inline constexpr uint16_t kSleepToneDurMs    = 100;
 inline constexpr uint16_t kSleepToneGapMs    = 150;
 
-/// Power-off tone: three descending beeps (6000 → 4000 → 2500 Hz).
-/// The descending pitch signals "shutting down" to the user.
-inline constexpr uint16_t kPowerOffTone1Hz   = 6000;
-inline constexpr uint16_t kPowerOffTone2Hz   = 4000;
-inline constexpr uint16_t kPowerOffTone3Hz   = 2500;
+/// Power-off tone: descending C major triad (G7 → E7 → C7).
+inline constexpr uint16_t kPowerOffTone1Hz   = 3136;  ///< G7
+inline constexpr uint16_t kPowerOffTone2Hz   = 2637;  ///< E7
+inline constexpr uint16_t kPowerOffTone3Hz   = 2093;  ///< C7
 inline constexpr uint16_t kPowerOffToneDurMs = 100;
 inline constexpr uint16_t kPowerOffToneGapMs = 150;
 
@@ -74,7 +73,7 @@ inline constexpr uint32_t kSerialBaudRate = 115200;  ///< UART baud rate for Ser
 // The ESP32 NVS (Non-Volatile Storage) partition stores the currently selected
 // canned message index so it survives deep sleep and power cycles.
 
-inline constexpr const char* kAppName       = "mesh-remote";    ///< NVS namespace (max 15 chars)
+inline constexpr const char* kAppName       = "mesh-pager";    ///< NVS namespace (max 15 chars)
 inline constexpr const char* kMsgIndexKey   = "messageIndex";   ///< NVS key for persisted message index
 
 }  // namespace mesh::config

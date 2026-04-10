@@ -17,12 +17,9 @@ namespace mesh::config {
 
 inline constexpr uint16_t kChargeCurrent     = 256;   ///< PMIC charge current limit (mA)
 inline constexpr uint16_t kChargeVoltage     = 4200;  ///< PMIC charge termination voltage (mV, 4.2V = standard LiPo)
-inline constexpr uint32_t kDimTimeoutMs      = 8000;  ///< Dim display backlight after this many ms of inactivity
 inline constexpr uint32_t kSleepTimeoutMs    = 15000; ///< Enter deep sleep after this many ms of inactivity
 inline constexpr uint32_t kDebounceGuardMs   = 1000;  ///< Ignore spurious inputs for this long after wake
 inline constexpr uint16_t kButtonHoldMs      = 1000;  ///< Physical button hold duration to trigger power-off
-inline constexpr uint8_t  kBrightnessActive  = 80;    ///< Normal backlight brightness (0–255 PWM duty)
-inline constexpr uint8_t  kBrightnessDim     = 25;    ///< Dimmed backlight brightness during inactivity
 inline constexpr uint8_t  kCpuFreqMHz        = 80;    ///< CPU clock (reduced from 160MHz default; saves ~25% power)
 inline constexpr uint8_t  kLoopIdleDelayMs   = 10;    ///< delay() in idle loop — lets CPU enter automatic light sleep
 

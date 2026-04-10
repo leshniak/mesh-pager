@@ -68,7 +68,6 @@ protocol::PacketDedup<> packetDedup;  ///< Deduplication cache (64 entries, 10mi
 // and the end of loop() redraws if needed.
 bool dirty = true;             ///< True when the screen needs to be redrawn
 bool displaySleeping = false;  ///< True when the display is powered off (deep sleep pending)
-bool displayDimmed = false;    ///< True when the backlight is at reduced brightness
 bool showHistory = false;      ///< True when the history overlay is visible
 bool showHint = true;          ///< True until the user's first interaction (shows "swipe | hold")
 
@@ -186,7 +185,6 @@ void handleReceive(uint32_t now) {
 ///     play sleep tone, and enter ESP32 deep sleep (wakes on KEY1 button press).
 void handleSleep() {
     displaySleeping = true;
-    displayDimmed = false;
     hal::display::sleep();
     touchInput.consumeNextTouch();  // Next touch = wake, not action
 
@@ -365,12 +363,8 @@ void loop() {
         // device stays alive — touch can wake it without full deep-sleep cycle)
         if (displaySleeping && touchEvent.gesture == hal::TouchGesture::Wake) {
             displaySleeping = false;
-            displayDimmed = false;
             hal::display::wakeup();
             dirty = true;
-        } else if (displayDimmed) {
-            displayDimmed = false;
-            hal::display::brighten();
         }
     }
 
@@ -462,10 +456,6 @@ void loop() {
 
     if (singleClick || doubleClick) {
         lastActionMs = now;
-        if (displayDimmed) {
-            displayDimmed = false;
-            hal::display::brighten();
-        }
     }
 
     // ── 7. State machine ────────────────────────────────────────────────────
@@ -533,16 +523,7 @@ void loop() {
         dirty = false;
     }
 
-    // ── 9. Display dimming ──────────────────────────────────────────────────
-    // Reduce brightness during the window between kDimTimeoutMs and kSleepTimeoutMs.
-    const uint32_t inactiveMs = now - lastActionMs;
-    if (!displaySleeping && !displayDimmed
-        && inactiveMs >= config::kDimTimeoutMs && inactiveMs < config::kSleepTimeoutMs) {
-        displayDimmed = true;
-        hal::display::dim();
-    }
-
-    // ── 10. Idle delay ──────────────────────────────────────────────────────
+    // ── 9. Idle delay ───────────────────────────────────────────────────────
     // When nothing needs immediate attention, delay() lets the ESP32 enter
     // automatic light sleep (modem sleep at 80MHz), saving power between
     // loop iterations.

@@ -28,12 +28,6 @@ void sleep();
 /// Re-enable the display controller and restore full brightness.
 void wakeup();
 
-/// Reduce backlight to kBrightnessDim — used during the inactivity dim period.
-void dim();
-
-/// Restore backlight to kBrightnessActive — called when user interaction resumes.
-void brighten();
-
 /// Log a formatted info message to Serial. Printf-style format string.
 /// No-op visible to the user; used for USB-CDC debug output only.
 void logInfo(const char* fmt, ...) __attribute__((format(printf, 1, 2)));

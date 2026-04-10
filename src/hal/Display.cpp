@@ -1,5 +1,4 @@
 #include "hal/Display.h"
-#include "config/AppConfig.h"
 
 #include <M5Unified.h>
 #include <cstdarg>
@@ -11,7 +10,6 @@ namespace mesh::hal::display {
 /// and clear to black. Called once during setup().
 void init() {
     M5.Display.setRotation(0);
-    M5.Display.setBrightness(config::kBrightnessActive);
     M5.Display.fillScreen(TFT_BLACK);
 }
 
@@ -27,18 +25,6 @@ void sleep() {
 /// device wakes from sleep due to button press or charge-state change.
 void wakeup() {
     M5.Display.wakeup();
-    M5.Display.setBrightness(config::kBrightnessActive);
-}
-
-/// Dim the backlight for power saving during the inactivity window between
-/// kDimTimeoutMs and kSleepTimeoutMs.
-void dim() {
-    M5.Display.setBrightness(config::kBrightnessDim);
-}
-
-/// Restore full brightness when the user touches the screen or presses a button.
-void brighten() {
-    M5.Display.setBrightness(config::kBrightnessActive);
 }
 
 /// Format and print an info-level message to Serial.

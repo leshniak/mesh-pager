@@ -18,13 +18,13 @@ size_t buildPacket(const PacketHeader& header,
     aesCtrCrypt(plainPayload, payloadLen, header.packetId, header.source, key);
 
     // Write the 16-byte mesh header (all fields little-endian where multi-byte)
-    putLe32(outFrame + 0, header.dest);
-    putLe32(outFrame + 4, header.source);
-    putLe32(outFrame + 8, header.packetId);
-    outFrame[12] = header.flags;
-    outFrame[13] = header.channelHash;
-    outFrame[14] = header.nextHop;
-    outFrame[15] = header.relayNode;
+    putLe32(outFrame + kOffDest,     header.dest);
+    putLe32(outFrame + kOffSource,   header.source);
+    putLe32(outFrame + kOffPacketId, header.packetId);
+    outFrame[kOffFlags]       = header.flags;
+    outFrame[kOffChannelHash] = header.channelHash;
+    outFrame[kOffNextHop]     = header.nextHop;
+    outFrame[kOffRelayNode]   = header.relayNode;
 
     // Append the now-encrypted payload after the header
     std::memcpy(outFrame + kMeshHeaderLen, plainPayload, payloadLen);
@@ -37,17 +37,17 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
                       char* outText, size_t outTextMax, size_t& outTextLen) {
     outTextLen = 0;
 
-    // Minimum frame: 16-byte header + at least 2 bytes of protobuf
-    if (frameLen < kMeshHeaderLen + 2) return MeshError::PacketTooShort;
+    // Minimum frame: header + smallest valid protobuf
+    if (frameLen < kMeshHeaderLen + kMinProtoPayloadLen) return MeshError::PacketTooShort;
 
     // Extract the 16-byte header
-    outHeader.dest       = getLe32(frame + 0);
-    outHeader.source     = getLe32(frame + 4);
-    outHeader.packetId   = getLe32(frame + 8);
-    outHeader.flags      = frame[12];
-    outHeader.channelHash = frame[13];
-    outHeader.nextHop    = frame[14];
-    outHeader.relayNode  = frame[15];
+    outHeader.dest        = getLe32(frame + kOffDest);
+    outHeader.source      = getLe32(frame + kOffSource);
+    outHeader.packetId    = getLe32(frame + kOffPacketId);
+    outHeader.flags       = frame[kOffFlags];
+    outHeader.channelHash = frame[kOffChannelHash];
+    outHeader.nextHop     = frame[kOffNextHop];
+    outHeader.relayNode   = frame[kOffRelayNode];
 
     // Decrypt the payload into a local buffer (don't modify the original frame)
     const size_t encLen = frameLen - kMeshHeaderLen;
@@ -72,10 +72,12 @@ MeshError parsePacket(const uint8_t* frame, size_t frameLen,
     }
 
     // Sanitize to printable ASCII — replace control chars and high bytes with '.'
+    constexpr uint8_t kPrintableMin = 0x20;  // Space
+    constexpr uint8_t kPrintableMax = 0x7E;  // Tilde (~)
     const size_t copyLen = (payloadLen < outTextMax - 1) ? payloadLen : (outTextMax - 1);
     for (size_t i = 0; i < copyLen; ++i) {
         const uint8_t ch = payload[i];
-        outText[i] = (ch >= 32 && ch <= 126) ? static_cast<char>(ch) : '.';
+        outText[i] = (ch >= kPrintableMin && ch <= kPrintableMax) ? static_cast<char>(ch) : '.';
     }
     outText[copyLen] = '\0';
     outTextLen = copyLen;

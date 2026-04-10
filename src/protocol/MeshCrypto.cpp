@@ -15,14 +15,14 @@ void aesCtrCrypt(uint8_t* buffer, size_t len,
 
     // packetId is 32-bit but occupies the first 8 bytes (upper 4 are zero)
     const uint64_t packetIdU64 = static_cast<uint64_t>(packetId);
-    std::memcpy(nonce, &packetIdU64, 8);
-    std::memcpy(nonce + 8, &fromNode, 4);
-    // nonce[12..15] remain zero
+    std::memcpy(nonce, &packetIdU64, kNoncePacketIdLen);
+    std::memcpy(nonce + kNonceSourceOffset, &fromNode, kNonceSourceLen);
+    // Remaining bytes stay zero-initialized
 
     // mbedtls AES-CTR: encrypts/decrypts buffer in-place
     mbedtls_aes_context ctx;
     mbedtls_aes_init(&ctx);
-    mbedtls_aes_setkey_enc(&ctx, key, 256);
+    mbedtls_aes_setkey_enc(&ctx, key, kKeyBits);
     mbedtls_aes_crypt_ctr(&ctx, len, &ncOff, nonce, streamBlock, buffer, buffer);
     mbedtls_aes_free(&ctx);
 }

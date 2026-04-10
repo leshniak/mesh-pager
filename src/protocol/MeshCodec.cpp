@@ -81,13 +81,14 @@ uint8_t computeChannelHash(const char* channelName, const uint8_t key[kKeyLen]) 
     return static_cast<uint8_t>(nameHash ^ keyHash);
 }
 
-NodeId nodeIdFromMac(const uint8_t mac[6]) {
+NodeId nodeIdFromMac(const uint8_t mac[kMacLen]) {
     // Meshtastic ESP32 convention: node ID = last 4 bytes of MAC in big-endian.
     // For a MAC of AA:BB:CC:DD:EE:FF, node ID = 0xCCDDEEFF.
-    return (static_cast<uint32_t>(mac[2]) << 24)
-         | (static_cast<uint32_t>(mac[3]) << 16)
-         | (static_cast<uint32_t>(mac[4]) << 8)
-         | (static_cast<uint32_t>(mac[5]));
+    const size_t o = kMacNodeIdOffset;
+    return (static_cast<uint32_t>(mac[o])     << 24)
+         | (static_cast<uint32_t>(mac[o + 1]) << 16)
+         | (static_cast<uint32_t>(mac[o + 2]) << 8)
+         | (static_cast<uint32_t>(mac[o + 3]));
 }
 
 size_t encodeTextPayload(const uint8_t* text, size_t textLen,
@@ -105,9 +106,9 @@ size_t encodeTextPayload(const uint8_t* text, size_t textLen,
     if (outBufMax < needed) return 0;
 
     size_t pos = 0;
-    outBuf[pos++] = 0x08;  // field 1 tag: (1 << 3) | 0 = 0x08
+    outBuf[pos++] = kProtoTagPortnum;
     outBuf[pos++] = static_cast<uint8_t>(PortNum::TextMessage);
-    outBuf[pos++] = 0x12;  // field 2 tag: (2 << 3) | 2 = 0x12
+    outBuf[pos++] = kProtoTagPayload;
     outBuf[pos++] = static_cast<uint8_t>(textLen);
     std::memcpy(outBuf + pos, text, textLen);
     pos += textLen;
@@ -134,14 +135,14 @@ bool decodeDataPayload(const uint8_t* data, size_t dataLen,
         const uint32_t field = static_cast<uint32_t>(key >> 3);   // field number
         const uint8_t wire = static_cast<uint8_t>(key & 0x07);    // wire type
 
-        if (field == 1 && wire == 0) {
+        if (field == kProtoFieldPortnum && wire == 0) {
             // portnum (varint) — identifies the application (TextMessage, Routing, etc.)
             uint64_t v = 0;
             if (!pbReadVarint(cursor, end, v)) return false;
             portOut = static_cast<uint32_t>(v);
             continue;
         }
-        if (field == 2 && wire == 2) {
+        if (field == kProtoFieldPayload && wire == 2) {
             // payload (length-delimited) — the actual application data
             uint64_t pLen = 0;
             if (!pbReadVarint(cursor, end, pLen)) return false;

@@ -36,7 +36,33 @@ inline constexpr size_t kMaxEncryptedLen   = 240;         ///< Max payload after
 inline constexpr size_t kMaxTextLen        = 127;         ///< Max text bytes in a single message
 inline constexpr size_t kRxBufferLen       = 255;         ///< RadioLib max receive buffer
 inline constexpr size_t kKeyLen            = 32;          ///< AES-256 key size in bytes
+inline constexpr size_t kKeyBits           = 256;         ///< AES-256 key size in bits (for mbedtls)
 inline constexpr size_t kNonceLen          = 16;          ///< AES-CTR nonce/IV size
+inline constexpr size_t kMinProtoPayloadLen = 2;          ///< Smallest valid protobuf (1-byte tag + 1-byte value)
+
+// ── Mesh header field byte offsets ─────────────────────────────────────────
+// See frame layout diagram above. All multi-byte fields are little-endian.
+
+inline constexpr size_t kOffDest        = 0;   ///< Destination node ID (4 bytes LE)
+inline constexpr size_t kOffSource      = 4;   ///< Source node ID (4 bytes LE)
+inline constexpr size_t kOffPacketId    = 8;   ///< Packet identifier (4 bytes LE)
+inline constexpr size_t kOffFlags       = 12;  ///< Flags bitfield (1 byte)
+inline constexpr size_t kOffChannelHash = 13;  ///< Channel hash (1 byte)
+inline constexpr size_t kOffNextHop     = 14;  ///< Next-hop node (1 byte, unused)
+inline constexpr size_t kOffRelayNode   = 15;  ///< Relay node (1 byte, unused)
+
+// ── AES-CTR nonce layout ───────────────────────────────────────────────────
+// The 16-byte nonce is: packetId (8 bytes LE) + sourceNode (4 bytes LE) + zeros (4 bytes)
+
+inline constexpr size_t kNoncePacketIdLen   = 8;  ///< Bytes occupied by packetId in nonce (LE, upper 4 zero)
+inline constexpr size_t kNonceSourceOffset  = 8;  ///< Byte offset of sourceNode within the nonce
+inline constexpr size_t kNonceSourceLen     = 4;  ///< Bytes occupied by sourceNode in nonce
+
+// ── MAC-to-NodeId mapping ──────────────────────────────────────────────────
+// Meshtastic ESP32 convention: node ID = last 4 bytes of 6-byte MAC (big-endian).
+
+inline constexpr size_t kMacLen             = 6;  ///< IEEE 802 MAC address length
+inline constexpr size_t kMacNodeIdOffset    = 2;  ///< First MAC byte used for node ID
 
 /// Meshtastic application port numbers.
 /// Only TextMessage is used by this device; other port numbers (Routing, Position, etc.)
@@ -44,6 +70,14 @@ inline constexpr size_t kNonceLen          = 16;          ///< AES-CTR nonce/IV 
 enum class PortNum : uint8_t {
     TextMessage = 1,   ///< UTF-8 text payload
 };
+
+// ── Protobuf Data message field tags ───────────────────────────────────────
+// Meshtastic Data message fields we encode/decode. Tags are (fieldNumber << 3 | wireType).
+
+inline constexpr uint8_t kProtoTagPortnum  = 0x08;  ///< Field 1, wire type 0 (varint) — portnum
+inline constexpr uint8_t kProtoTagPayload  = 0x12;  ///< Field 2, wire type 2 (length-delimited) — payload
+inline constexpr uint8_t kProtoFieldPortnum = 1;     ///< Protobuf field number for portnum
+inline constexpr uint8_t kProtoFieldPayload = 2;     ///< Protobuf field number for payload
 
 /// Error codes returned by protocol and radio operations.
 enum class MeshError : uint8_t {

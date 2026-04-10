@@ -33,7 +33,7 @@ uint8_t computeChannelHash(const char* channelName, const uint8_t key[kKeyLen]);
 
 /// Derive Meshtastic node ID from WiFi MAC address (bytes [2..5]).
 /// Matches the convention used by ESP32 Meshtastic devices.
-NodeId nodeIdFromMac(const uint8_t mac[6]);
+NodeId nodeIdFromMac(const uint8_t mac[kMacLen]);
 
 /// Encode a text string into a Meshtastic protobuf Data payload.
 ///

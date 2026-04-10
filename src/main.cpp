@@ -382,6 +382,11 @@ void loop() {
             lastActionMs = now;
             hal::display::wakeup();
             dirty = true;
+            // Consume any pending single/double-click so the wake press
+            // doesn't also trigger a send or toggle stay-awake.
+            M5.BtnA.wasSingleClicked();
+            M5.BtnA.wasDoubleClicked();
+            return;  // Skip the rest of this loop iteration
         }
     }
 

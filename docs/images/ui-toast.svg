@@ -18,9 +18,9 @@
   <!-- Battery percentage -->
   <text x="105" y="12" fill="#8b949e" font-size="8" text-anchor="end">85%</text>
 
-  <!-- Battery icon -->
+  <!-- Battery icon (nub on right = positive terminal) -->
   <rect x="108" y="6" width="12" height="7" fill="none" stroke="#8b949e" stroke-width="0.8"/>
-  <rect x="106" y="8" width="2" height="3" fill="#8b949e"/>
+  <rect x="120" y="8" width="2" height="3" fill="#8b949e"/>
   <rect x="109" y="7" width="8" height="5" fill="#00d2b4" rx="0.5"/>
 
   <!-- Toast notification -->
@@ -28,6 +28,9 @@
 
   <!-- Toast sender ID -->
   <text x="12" y="33" fill="#b0c4de" font-size="7">!11223344</text>
+
+  <!-- Toast SNR -->
+  <text x="123" y="33" fill="#b0c4de" font-size="7" text-anchor="end">3dB</text>
 
   <!-- Toast message -->
   <text x="12" y="45" fill="#ffffff" font-size="8">On my way!</text>

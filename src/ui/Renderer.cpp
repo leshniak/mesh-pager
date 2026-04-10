@@ -51,8 +51,8 @@ void Renderer::render(const RenderState& state) {
 }
 
 /// Draw the status bar: node ID on the left, battery icon + percentage on the right.
-/// The battery icon is a small rectangle outline with a nub on the left side
-/// (mimicking a battery shape). The fill color changes to red when ≤20%.
+/// The battery icon is a small rectangle outline with a nub on the right side
+/// (positive terminal). The fill and percentage turn red when ≤20%.
 void Renderer::drawStatusBar(const RenderState& state, int16_t y) {
     sprite_.fillRect(0, y, kScreenWidth, kStatusBarHeight, kColorStatusBar);
     sprite_.drawFastHLine(0, y + kStatusBarHeight - 1, kScreenWidth, kColorCardBorder);
@@ -66,16 +66,18 @@ void Renderer::drawStatusBar(const RenderState& state, int16_t y) {
     sprite_.setTextDatum(middle_left);
     sprite_.drawString(idBuf, 4, y + kStatusBarHeight / 2);
 
-    // Battery icon (right-aligned): outline + positive terminal nub + fill bar
+    // Battery icon (right-aligned): outline + positive terminal nub on the right
     const int16_t batW = 12, batH = 7, nubW = 2, nubH = 3;
-    const int16_t batX = kScreenWidth - 4 - batW;
+    const int16_t nubX = kScreenWidth - 4;
+    const int16_t batX = nubX - batW;
     const int16_t batY = y + (kStatusBarHeight - batH) / 2;
     sprite_.drawRect(batX, batY, batW, batH, kColorStatusText);
-    sprite_.fillRect(batX - nubW, batY + (batH - nubH) / 2, nubW, nubH, kColorStatusText);
+    sprite_.fillRect(nubX, batY + (batH - nubH) / 2, nubW, nubH, kColorStatusText);
 
     // Fill proportional to battery level; red if critically low
     const int16_t fillW = static_cast<int16_t>((batW - 2) * state.batteryPercent / 100);
-    uint16_t batColor = (state.batteryPercent > 20) ? kColorSendGreen : kColorError;
+    const bool lowBattery = (state.batteryPercent <= 20);
+    uint16_t batColor = lowBattery ? kColorError : kColorSendGreen;
     if (fillW > 0) {
         sprite_.fillRect(batX + 1, batY + 1, fillW, batH - 2, batColor);
     }
@@ -83,8 +85,9 @@ void Renderer::drawStatusBar(const RenderState& state, int16_t y) {
     // Battery percentage text (right-aligned, left of the icon)
     char pctBuf[6];
     snprintf(pctBuf, sizeof(pctBuf), "%d%%", state.batteryPercent);
+    sprite_.setTextColor(lowBattery ? kColorError : kColorStatusText);
     sprite_.setTextDatum(middle_right);
-    const int16_t pctRight = batX - nubW - 2;
+    const int16_t pctRight = batX - 2;
     sprite_.drawString(pctBuf, pctRight, y + kStatusBarHeight / 2);
 
     // Stay-awake indicator: red dot left of battery percentage

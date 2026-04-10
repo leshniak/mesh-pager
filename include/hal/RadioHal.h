@@ -46,8 +46,12 @@ public:
 
     void setRxCallback(RxCallback cb) { rxCallback_ = cb; }
 
+    /// SNR of the last received packet (dB). Valid after pollRx() delivers a packet.
+    float lastSnr() const { return lastSnr_; }
+
 private:
     RxCallback rxCallback_ = nullptr;
+    float lastSnr_ = 0.0f;
 
     void setupPowerAndRfSwitches();
     void disablePowerAndRfSwitches();

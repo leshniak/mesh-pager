@@ -13,10 +13,12 @@ namespace mesh::ui {
 ///
 /// The new entry also becomes the active toast, replacing any existing one.
 /// There's no toast queue — only the latest message is shown.
-void ToastManager::addMessage(protocol::NodeId sender, const char* text, uint32_t nowMs) {
+void ToastManager::addMessage(protocol::NodeId sender, const char* text, uint32_t nowMs,
+                              int8_t snr) {
     auto& entry = history_[historyHead_];
     entry.sender = sender;
     entry.timestampMs = nowMs;
+    entry.snr = snr;
     entry.valid = true;
     strncpy(entry.text, text, config::ui::kHistoryTextMaxLen - 1);
     entry.text[config::ui::kHistoryTextMaxLen - 1] = '\0';  // Ensure null-termination

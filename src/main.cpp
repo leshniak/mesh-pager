@@ -59,6 +59,8 @@ app::State appState = app::State::Idle;  ///< Current state machine state
 uint32_t lastActionMs = 0;    ///< millis() of last user interaction (for sleep timer)
 bool wasCharging = false;      ///< Previous loop's charging state (for edge detection)
 bool pendingRx = false;        ///< Set by radio ISR callback when a packet arrives
+bool stayAwake = false;        ///< True when stay-awake lock is active (double-click toggle)
+uint32_t stayAwakeStartMs = 0; ///< millis() when stay-awake was enabled (for safety timeout)
 uint8_t rxFrameBuf[protocol::kRxBufferLen] = {};  ///< Buffer for received radio frame
 size_t rxFrameLen = 0;         ///< Length of the received frame in rxFrameBuf
 protocol::PacketDedup<> packetDedup;  ///< Deduplication cache (64 entries, 10min expiry)
@@ -172,23 +174,32 @@ void handleReceive(uint32_t now) {
     if (textLen == 0) return;  // Non-text packet (e.g., position, telemetry)
     if (packetDedup.isDuplicate(hdr.source, hdr.packetId, now)) return;  // Already seen via another relay
 
-    hal::display::logInfo(">> <!%08X> %s", hdr.source, textOut);
+    lastActionMs = now;  // Incoming messages keep the device awake
+
+    // Wake display from stay-awake standby on valid message
+    if (displaySleeping && stayAwake) {
+        displaySleeping = false;
+        hal::display::wakeup();
+    }
+
+    const int8_t snr = static_cast<int8_t>(radioHal.lastSnr());
+    hal::display::logInfo(">> <!%08X> snr=%d %s", hdr.source, snr, textOut);
     hal::playRxTone();
-    toastManager.addMessage(hdr.source, textOut, now);
+    toastManager.addMessage(hdr.source, textOut, now, snr);
     dirty = true;
 }
 
-/// Enter sleep mode. Two paths:
-///   - **If charging**: Just turn off the display (light sleep, keep radio off).
-///     The device stays alive so it can wake on touch or charge-state change.
-///   - **If not charging**: Full deep sleep. Save state to NVS, power down radio,
-///     play sleep tone, and enter ESP32 deep sleep (wakes on KEY1 button press).
+/// Enter sleep mode. Three paths:
+///   - **If charging**: display off, device stays alive (wake on touch or charge change).
+///   - **If stay-awake lock**: display off, radio stays active (wake on RX or button).
+///   - **Otherwise**: full deep sleep (radio off, wake on KEY1 button press only).
 void handleSleep() {
     displaySleeping = true;
     hal::display::sleep();
     touchInput.consumeNextTouch();  // Next touch = wake, not action
 
-    if (hal::power::isCharging()) return;  // Stay alive while charging (display off only)
+    if (hal::power::isCharging()) return;  // Display off only — USB keeps MCU alive
+    if (stayAwake) return;                 // Display off, radio stays on — standby mode
 
     // Full deep sleep path
     cannedMessages.save();        // Persist selected message index to NVS
@@ -214,6 +225,7 @@ void renderFrame(uint32_t now) {
     state.channelName = channelName;
     state.nodeId = nodeId;
     state.batteryPercent = static_cast<uint8_t>(M5.Power.getBatteryLevel());
+    state.stayAwake = stayAwake;
     state.messageText = cannedMessages.current().data();
     state.messageIndex = cannedMessages.index();
     state.messageCount = static_cast<uint8_t>(cannedMessages.count());
@@ -353,7 +365,16 @@ void loop() {
         dirty = true;
     }
 
-    // ── 2. Process touch input ──────────────────────────────────────────────
+    // ── 2. Stay-awake standby: wake display on button press ────────────────
+    // RX wake is handled in handleReceive() — only valid messages wake the screen.
+    if (displaySleeping && stayAwake && M5.BtnA.wasClicked()) {
+        displaySleeping = false;
+        lastActionMs = now;
+        hal::display::wakeup();
+        dirty = true;
+    }
+
+    // ── 3. Process touch input ──────────────────────────────────────────────
     auto touchEvent = touchInput.update();
 
     if (touchEvent.touching) {
@@ -368,7 +389,7 @@ void loop() {
         }
     }
 
-    // ── 3. Handle touch gestures (only when display is awake) ───────────────
+    // ── 4. Handle touch gestures (only when display is awake) ───────────────
     if (!displaySleeping) {
         switch (touchEvent.gesture) {
             case hal::TouchGesture::SwipeLeft:
@@ -434,12 +455,12 @@ void loop() {
 
     }
 
-    // ── 4. Toast countdown timer ────────────────────────────────────────────
+    // ── 5. Toast countdown timer ────────────────────────────────────────────
     if (toastManager.update(now)) {
         dirty = true;  // Redraw to animate the countdown bar
     }
 
-    // ── 5. Sent/error flash auto-clear ──────────────────────────────────────
+    // ── 6. Sent/error flash auto-clear ──────────────────────────────────────
     if (sentFlash || errorFlash) {
         if (now - flashStartMs >= config::ui::kSentFlashMs) {
             sentFlash = false;
@@ -448,7 +469,7 @@ void loop() {
         }
     }
 
-    // ── 6. Physical button (KEY1) states ────────────────────────────────────
+    // ── 7. Physical button (KEY1) states ────────────────────────────────────
     // M5.BtnA.was*() methods are consumed on first call — read once and reuse.
     const bool singleClick = M5.BtnA.wasSingleClicked();
     const bool doubleClick = M5.BtnA.wasDoubleClicked();
@@ -458,7 +479,19 @@ void loop() {
         lastActionMs = now;
     }
 
-    // ── 7. State machine ────────────────────────────────────────────────────
+    // ── 8. Stay-awake safety timeout ─────────────────────────────────────────
+    // After kStayAwakeMaxMs (10 min), force deep sleep with audio warning.
+    if (stayAwake && (now - stayAwakeStartMs) >= config::kStayAwakeMaxMs) {
+        stayAwake = false;
+        hal::display::sleep();
+        cannedMessages.save();
+        radioHal.sleep();
+        hal::power::ledOff();
+        hal::playSleepTone();
+        hal::power::enterDeepSleep();  // Never returns
+    }
+
+    // ── 9. State machine ────────────────────────────────────────────────────
     // Collect all input events into a struct and feed to the pure state machine.
     // The state machine only returns the next state — all side effects are here.
     app::InputEvents events;
@@ -501,11 +534,11 @@ void loop() {
             break;
 
         case app::State::Idle:
-            // Physical button double-click: advance to next canned message
+            // Physical button double-click: toggle stay-awake lock
             if (events.doubleClick) {
                 lastActionMs = now;
-                cannedMessages.next();
-                showHint = false;
+                stayAwake = !stayAwake;
+                if (stayAwake) stayAwakeStartMs = now;
                 dirty = true;
             }
             // Physical button single-click: just reset the inactivity timer
@@ -517,13 +550,13 @@ void loop() {
             break;
     }
 
-    // ── 8. Render ───────────────────────────────────────────────────────────
+    // ── 10. Render ──────────────────────────────────────────────────────────
     if (dirty && !displaySleeping) {
         renderFrame(now);
         dirty = false;
     }
 
-    // ── 9. Idle delay ───────────────────────────────────────────────────────
+    // ── 11. Idle delay ──────────────────────────────────────────────────────
     // When nothing needs immediate attention, delay() lets the ESP32 enter
     // automatic light sleep (modem sleep at 80MHz), saving power between
     // loop iterations.

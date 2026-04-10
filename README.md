@@ -24,9 +24,12 @@ A Meshtastic-compatible LoRa mesh pager built on the **Arduino Nesso N1** (ESP32
 - **Touch UI** — 135x240 TFT with gesture controls (swipe, hold-to-send, swipe down for history)
 - **Physical button** — single click to send, double click to cycle messages, long press to power off
 - **Deep sleep** — auto-sleeps after 15s of inactivity, wakes on button press (~40-60 uA draw)
+- **Stay-awake lock** — double-click for standby mode: screen off, radio listening, wakes only on valid channel messages or button press (emergency deep sleep after 10 min)
+- **Smart wake** — incoming messages reset the sleep timer automatically
 - **Send-on-wake** — optional instant transmit on wake for gate/garage remote use
-- **Message history** — last 5 sent/received messages in a swipe-down overlay
-- **Toast notifications** — incoming messages pop up with sender ID and countdown timer
+- **Message history** — last 5 sent/received messages in a swipe-down overlay with SNR
+- **Toast notifications** — incoming messages pop up with sender ID, SNR, and countdown timer
+- **Packet deduplication** — 64-entry cache prevents duplicate display via multiple relay paths
 - **Audio feedback** — distinct tones for TX, RX, sleep, and power off
 - **Power management** — display dimming, CPU frequency scaling (80 MHz), battery monitoring
 
@@ -97,7 +100,7 @@ When enabled, pressing the button to wake the device immediately sends the curre
 | Swipe down | Open message history |
 | Swipe up | Close message history |
 | Button single click | Send current message |
-| Button double click | Next message |
+| Button double click | Toggle stay-awake lock |
 | Button long press | Power off |
 
 ## Project Structure

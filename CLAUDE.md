@@ -38,13 +38,17 @@ main.cpp  — glue: setup, loop, event routing, state transitions
 - **RGB565 color format** — use the `rgb565(r, g, b)` constexpr helper in UIConfig.h.
 - **Namespace structure**: `mesh::config`, `mesh::protocol`, `mesh::hal`, `mesh::app`, `mesh::ui`.
 - **State machine** in `AppState.cpp` is pure (no side effects) — it takes `InputEvents` and returns the next `State`. Side effects happen in `main.cpp` switch cases.
+- **Stay-awake lock** — double-click toggles standby mode. Screen turns off after normal timeout but radio stays active. Only valid text messages on our channel (same filtering as toast) or BtnA wake the screen. Emergency deep sleep with tone after `kStayAwakeMaxMs` (10 min). Red dot in status bar near battery.
+- **RX keeps device awake** — incoming messages reset the sleep timer.
+- **Packet deduplication** — `PacketDedup` (64 entries, 10 min expiry) filters duplicate packets received via multiple relay paths.
+- **No display dimming** — Nesso N1 backlight is IO-expander GPIO (on/off only, not PWM). `setBrightness()` has no effect.
 
 ## Display
 
 - 135x240 pixels, portrait orientation, 16-bit color
 - Single `LGFX_Sprite` double-buffered to internal SRAM (no PSRAM on ESP32-C6)
 - Layout top-to-bottom: status bar (18px) → toast (if active) → message card (fills rest)
-- Status bar: node ID (left), battery icon + percentage (right)
+- Status bar: node ID (left), stay-awake dot (if active), battery icon + percentage (right)
 - Message card: hint text → channel name → centered message → page dots → hold progress bar
 
 ## Touch Gestures

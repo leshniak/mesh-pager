@@ -11,7 +11,7 @@
 ///   inactivity >= kSleepTimeoutMs      → EnteringSleep (unless charging)
 ///   holdComplete or singleClick        → Transmitting
 ///   rxReady                            → Receiving
-///   doubleClick                        → Idle (message advance handled by caller)
+///   doubleClick                        → Idle (stay-awake toggle handled by caller)
 
 #include <cstdint>
 
@@ -29,7 +29,7 @@ enum class State : uint8_t {
 /// All fields are sampled once per loop iteration in main.cpp.
 struct InputEvents {
     bool singleClick     = false;  ///< Physical button single click → transmit
-    bool doubleClick     = false;  ///< Physical button double click → next message
+    bool doubleClick     = false;  ///< Physical button double click → toggle stay-awake
     bool holdComplete    = false;  ///< Touch hold reached 1000ms → transmit
     bool longPress       = false;  ///< Physical button held → power off
     bool touchActive     = false;  ///< Finger currently on screen

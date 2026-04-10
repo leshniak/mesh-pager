@@ -26,6 +26,7 @@ struct HistoryEntry {
     protocol::NodeId sender = 0;                        ///< Sender node ID (ours for TX)
     char text[config::ui::kHistoryTextMaxLen] = {};      ///< Message text (truncated to fit)
     uint32_t timestampMs = 0;                            ///< millis() when the message was added
+    int8_t snr = 0;                                      ///< SNR in dB (0 = not available, e.g. TX)
     bool valid = false;                                  ///< True if this slot has been written
 };
 
@@ -33,7 +34,8 @@ class ToastManager {
 public:
     /// Add a message to the history and activate it as the current toast.
     /// If a toast is already active, it is replaced (no queue).
-    void addMessage(protocol::NodeId sender, const char* text, uint32_t nowMs);
+    void addMessage(protocol::NodeId sender, const char* text, uint32_t nowMs,
+                    int8_t snr = 0);
 
     /// Check if the active toast has expired. Returns true if a toast is visible
     /// (caller should set dirty flag to keep animating the countdown bar).

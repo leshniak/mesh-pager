@@ -96,6 +96,8 @@ void RadioHal::pollRx() {
         return;
     }
 
+    lastSnr_ = radio.getSNR();
+
     if (rxCallback_) {
         rxCallback_(buf, static_cast<size_t>(packetLen));
     }

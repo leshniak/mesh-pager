@@ -84,7 +84,14 @@ void Renderer::drawStatusBar(const RenderState& state, int16_t y) {
     char pctBuf[6];
     snprintf(pctBuf, sizeof(pctBuf), "%d%%", state.batteryPercent);
     sprite_.setTextDatum(middle_right);
-    sprite_.drawString(pctBuf, batX - nubW - 2, y + kStatusBarHeight / 2);
+    const int16_t pctRight = batX - nubW - 2;
+    sprite_.drawString(pctBuf, pctRight, y + kStatusBarHeight / 2);
+
+    // Stay-awake indicator: red dot left of battery percentage
+    if (state.stayAwake) {
+        const int16_t dotX = pctRight - sprite_.textWidth(pctBuf) - 5;
+        sprite_.fillCircle(dotX, y + kStatusBarHeight / 2, 2, kColorError);
+    }
 }
 
 /// Draw the toast notification banner below the status bar.
@@ -121,12 +128,20 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
 
     sprite_.fillRect(toastX, toastY, toastW, toastH, kColorToast);
 
-    // Sender ID in light blue (distinguishes sender from message text)
+    // Sender ID in light blue (left), RSSI/SNR in dim white (right)
     char senderBuf[16];
     snprintf(senderBuf, sizeof(senderBuf), "!%08X", toast.sender);
     sprite_.setTextColor(rgb565(0xb0, 0xc4, 0xde));
     sprite_.setTextDatum(top_left);
     sprite_.drawString(senderBuf, toastX + kToastPadding, toastY + kToastPadding);
+
+    if (toast.snr != 0) {
+        char snrBuf[10];
+        snprintf(snrBuf, sizeof(snrBuf), "%ddB", toast.snr);
+        sprite_.setTextColor(rgb565(0xb0, 0xc4, 0xde));
+        sprite_.setTextDatum(top_right);
+        sprite_.drawString(snrBuf, toastX + toastW - kToastPadding, toastY + kToastPadding);
+    }
 
     // Message text (truncated with ".." if too long for one line)
     sprite_.setTextDatum(top_left);
@@ -392,18 +407,24 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
         sprite_.setTextDatum(top_left);
         sprite_.drawString(senderBuf, kPad, y);
 
-        // Relative time (right-aligned, e.g. "<1m", "5m", "23m")
+        // SNR + relative time (right-aligned, e.g. "3dB <1m")
         const uint32_t agoMs = state.nowMs - entry.timestampMs;
         const uint32_t agoMin = agoMs / 60000;
-        char timeBuf[8];
-        if (agoMin < 1) {
-            snprintf(timeBuf, sizeof(timeBuf), "<1m");
+        char infoBuf[16];
+        if (entry.snr != 0) {
+            if (agoMin < 1)
+                snprintf(infoBuf, sizeof(infoBuf), "%ddB <1m", entry.snr);
+            else
+                snprintf(infoBuf, sizeof(infoBuf), "%ddB %lum", entry.snr, (unsigned long)agoMin);
         } else {
-            snprintf(timeBuf, sizeof(timeBuf), "%lum", (unsigned long)agoMin);
+            if (agoMin < 1)
+                snprintf(infoBuf, sizeof(infoBuf), "<1m");
+            else
+                snprintf(infoBuf, sizeof(infoBuf), "%lum", (unsigned long)agoMin);
         }
         sprite_.setTextColor(kColorTextDim);
         sprite_.setTextDatum(top_right);
-        sprite_.drawString(timeBuf, kScreenWidth - kPad, y);
+        sprite_.drawString(infoBuf, kScreenWidth - kPad, y);
 
         // Message text (truncated if too long)
         y += kSenderRowH;

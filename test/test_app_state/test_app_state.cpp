@@ -154,6 +154,15 @@ void test_exact_sleep_timeout_boundary() {
     TEST_ASSERT_EQUAL(State::EnteringSleep, nextState(State::Idle, e));
 }
 
+void test_sleep_triggers_regardless_of_external_state() {
+    // stayAwake is handled in main.cpp (handleSleep chooses path),
+    // not in the state machine — it always returns EnteringSleep on timeout.
+    auto e = noEvents();
+    e.timeSinceLastActionMs = mesh::config::kSleepTimeoutMs;
+    e.isCharging = false;
+    TEST_ASSERT_EQUAL(State::EnteringSleep, nextState(State::Idle, e));
+}
+
 int main() {
     UNITY_BEGIN();
 
@@ -181,6 +190,8 @@ int main() {
 
     RUN_TEST(test_all_events_simultaneously);
     RUN_TEST(test_exact_sleep_timeout_boundary);
+
+    RUN_TEST(test_sleep_triggers_regardless_of_external_state);
 
     return UNITY_END();
 }

@@ -28,7 +28,7 @@
 
   <!-- Entry 1 -->
   <text x="6" y="34" fill="#58a6ff" font-size="7">!11223344</text>
-  <text x="129" y="34" fill="#484f58" font-size="7" text-anchor="end">3dB &lt;1m</text>
+  <text x="129" y="34" fill="#484f58" font-size="7" text-anchor="end">3dB +1 &lt;1m</text>
   <text x="6" y="46" fill="#ffffff" font-size="8">On my way!</text>
   <!-- Dotted separator -->
   <line x1="6" y1="52" x2="129" y2="52" stroke="#30363d" stroke-width="0.5" stroke-dasharray="1,3"/>

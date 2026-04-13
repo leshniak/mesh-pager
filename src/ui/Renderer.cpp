@@ -151,12 +151,22 @@ void Renderer::drawToast(const RenderState& state, int16_t y, int16_t& bottomY) 
     sprite_.setTextDatum(top_left);
     sprite_.drawString(senderBuf, toastX + kToastPadding, toastY + kToastPadding);
 
-    if (toast.snr != 0) {
-        char snrBuf[10];
-        snprintf(snrBuf, sizeof(snrBuf), "%ddB", toast.snr);
-        sprite_.setTextColor(rgb565(0xb0, 0xc4, 0xde));
-        sprite_.setTextDatum(top_right);
-        sprite_.drawString(snrBuf, toastX + toastW - kToastPadding, toastY + kToastPadding);
+    // SNR and hop count (right-aligned, e.g. "3dB 2h")
+    {
+        char infoBuf[16];
+        size_t pos = 0;
+        if (toast.snr != 0) {
+            pos += snprintf(infoBuf + pos, sizeof(infoBuf) - pos, "%ddB", toast.snr);
+        }
+        if (toast.hops > 0) {
+            pos += snprintf(infoBuf + pos, sizeof(infoBuf) - pos, "%s+%u",
+                            pos > 0 ? " " : "", toast.hops);
+        }
+        if (pos > 0) {
+            sprite_.setTextColor(rgb565(0xb0, 0xc4, 0xde));
+            sprite_.setTextDatum(top_right);
+            sprite_.drawString(infoBuf, toastX + toastW - kToastPadding, toastY + kToastPadding);
+        }
     }
 
     // Message text (truncated with ".." if too long for one line)
@@ -424,21 +434,22 @@ void Renderer::drawHistory(const RenderState& state, int16_t top) {
         sprite_.setTextDatum(top_left);
         sprite_.drawString(senderBuf, kPad, y);
 
-        // SNR + relative time (right-aligned, e.g. "3dB <1m")
+        // SNR, hops, relative time (right-aligned, e.g. "3dB 2h <1m")
         const uint32_t agoMs = state.nowMs - entry.timestampMs;
         const uint32_t agoMin = agoMs / 60000;
-        char infoBuf[16];
+        char infoBuf[24];
+        size_t pos = 0;
         if (entry.snr != 0) {
-            if (agoMin < 1)
-                snprintf(infoBuf, sizeof(infoBuf), "%ddB <1m", entry.snr);
-            else
-                snprintf(infoBuf, sizeof(infoBuf), "%ddB %lum", entry.snr, (unsigned long)agoMin);
-        } else {
-            if (agoMin < 1)
-                snprintf(infoBuf, sizeof(infoBuf), "<1m");
-            else
-                snprintf(infoBuf, sizeof(infoBuf), "%lum", (unsigned long)agoMin);
+            pos += snprintf(infoBuf + pos, sizeof(infoBuf) - pos, "%ddB", entry.snr);
         }
+        if (entry.hops > 0) {
+            pos += snprintf(infoBuf + pos, sizeof(infoBuf) - pos, "%s+%u",
+                            pos > 0 ? " " : "", entry.hops);
+        }
+        if (agoMin < 1)
+            snprintf(infoBuf + pos, sizeof(infoBuf) - pos, "%s<1m", pos > 0 ? " " : "");
+        else
+            snprintf(infoBuf + pos, sizeof(infoBuf) - pos, "%s%lum", pos > 0 ? " " : "", (unsigned long)agoMin);
         sprite_.setTextColor(kColorTextDim);
         sprite_.setTextDatum(top_right);
         sprite_.drawString(infoBuf, kScreenWidth - kPad, y);

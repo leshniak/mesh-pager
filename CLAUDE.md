@@ -49,6 +49,8 @@ main.cpp  — glue: setup, loop, event routing, state transitions
 - Single `LGFX_Sprite` double-buffered to internal SRAM (no PSRAM on ESP32-C6)
 - Layout top-to-bottom: status bar (18px) → toast (if active) → message card (fills rest)
 - Status bar: node ID (left), stay-awake dot (if active), battery icon + percentage (right)
+- Toast: sender ID (left), SNR + hop count +N (right), message text, countdown bar
+- History: sender ID (left), SNR + hop count +N + relative time (right), message text
 - Message card: hint text → channel name → centered message → page dots → hold progress bar
 
 ## Touch Gestures

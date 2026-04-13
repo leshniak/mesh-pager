@@ -29,8 +29,8 @@
   <!-- Toast sender ID -->
   <text x="12" y="33" fill="#b0c4de" font-size="7">!11223344</text>
 
-  <!-- Toast SNR -->
-  <text x="123" y="33" fill="#b0c4de" font-size="7" text-anchor="end">3dB</text>
+  <!-- Toast SNR + hops -->
+  <text x="123" y="33" fill="#b0c4de" font-size="7" text-anchor="end">3dB +1</text>
 
   <!-- Toast message -->
   <text x="12" y="45" fill="#ffffff" font-size="8">On my way!</text>

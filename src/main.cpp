@@ -200,9 +200,12 @@ void handleReceive(uint32_t now) {
     }
 
     const int8_t snr = static_cast<int8_t>(radioHal.lastSnr());
-    hal::display::logInfo(">> <!%08X> snr=%d %s", hdr.source, snr, textOut);
+    const uint8_t hopStart = (hdr.flags >> 5) & 0x07;
+    const uint8_t hopLimit = hdr.flags & 0x07;
+    const uint8_t hops = (hopStart >= hopLimit) ? (hopStart - hopLimit) : 0;
+    hal::display::logInfo(">> <!%08X> snr=%d hops=%u %s", hdr.source, snr, hops, textOut);
     hal::playRxTone();
-    toastManager.addMessage(hdr.source, textOut, now, snr);
+    toastManager.addMessage(hdr.source, textOut, now, snr, hops);
     dirty = true;
 }
 

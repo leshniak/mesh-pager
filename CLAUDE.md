@@ -70,6 +70,46 @@ Custom implementation (not the official Meshtastic library):
 - **Broadcast only**: dest = `0xFFFFFFFF`. ACKs don't work for broadcast (Meshtastic limitation).
 - **PortNum 1** = TextMessage. Other port numbers are received but silently ignored.
 
+## Keeping in Sync with Meshtastic
+
+This project implements a **minimal subset** of the Meshtastic over-the-air protocol — just enough to send/receive text messages on a shared channel. It is NOT built on the official Meshtastic firmware or libraries. This means protocol changes in upstream Meshtastic can silently break compatibility.
+
+### What we implement
+
+| Layer | Our code | Upstream reference |
+|-------|----------|-------------------|
+| Packet framing | `MeshPacket.cpp` — 16-byte header, field offsets in `MeshTypes.h` (`kOff*` constants) | [mesh.proto → MeshPacket](https://github.com/meshtastic/protobufs/blob/master/meshtastic/mesh.proto) |
+| Encryption | `MeshCrypto.cpp` — AES-256-CTR, nonce layout in `MeshTypes.h` (`kNonce*` constants) | [crypto.md](https://meshtastic.org/docs/overview/encryption/) |
+| Protobuf codec | `MeshCodec.cpp` — hand-rolled encode/decode for `Data` message (portnum + payload only) | [portnums.proto](https://github.com/meshtastic/protobufs/blob/master/meshtastic/portnums.proto) |
+| Channel hash | `MeshCodec.cpp` — `computeChannelHash()` XOR algorithm | [channel.proto](https://github.com/meshtastic/protobufs/blob/master/meshtastic/channel.proto) |
+| Radio params | `RadioConfig.h` — frequency, SF, BW, sync word matching LongFast EU preset | [radiomaster.h / modem presets](https://github.com/meshtastic/firmware/blob/master/src/mesh/RadioInterface.cpp) |
+| Node ID | `MeshCodec.cpp` — `nodeIdFromMac()` last-4-bytes-of-MAC convention | [NodeDB.cpp](https://github.com/meshtastic/firmware/blob/master/src/mesh/NodeDB.cpp) |
+
+### What we DON'T implement
+
+- Routing / acknowledgment / retransmission (we broadcast-only)
+- Admin channel, remote config, position, telemetry, or any PortNum other than TextMessage
+- NodeDB, neighbor discovery, or any mesh intelligence
+- Protobuf schema evolution (we decode only fields 1 and 2 of the Data message, skip the rest)
+
+### How to check for breaking changes
+
+If Meshtastic devices stop seeing our messages (or vice versa), check these in order:
+
+1. **Packet header layout** — has the 16-byte header structure changed? Compare `MeshTypes.h` offsets against [mesh.proto MeshPacket](https://github.com/meshtastic/protobufs/blob/master/meshtastic/mesh.proto). Focus on: field order, byte widths, the `flags` bitfield packing (hopLimit/wantAck/viaMqtt/hopStart).
+
+2. **Encryption nonce format** — has the AES-CTR nonce construction changed? Our nonce is `packetId(8 LE) + sourceNode(4 LE) + zeros(4)`. Check [Meshtastic encryption docs](https://meshtastic.org/docs/overview/encryption/).
+
+3. **Channel hash algorithm** — still XOR of name bytes XOR key bytes? If this changes, our packets get filtered out before decryption is even attempted.
+
+4. **Radio presets** — has LongFast changed its SF/BW/frequency? Compare `RadioConfig.h` against the modem preset definitions in Meshtastic firmware. Even a 1-bit difference in sync word (`0x2B`) means total silence.
+
+5. **Protobuf Data message** — have fields 1 (portnum) or 2 (payload) changed wire type or field number? Our codec skips unknown fields for forward-compatibility, so new fields won't break us, but changes to existing fields will.
+
+### Testing interop
+
+The simplest test: send a canned message from this device and verify it appears on a stock Meshtastic device (phone app or another node) on the same channel. Then send from Meshtastic and verify our device shows the toast. If either direction fails, walk through the checklist above.
+
 ## Secrets
 
 `include/secrets.h` contains channel name, base64 key, and canned message array. Never commit it. See `secrets.example.h` for the template.
@@ -77,6 +117,16 @@ Custom implementation (not the official Meshtastic library):
 ## Versioning
 
 Uses [Semantic Versioning](https://semver.org/) (`vMAJOR.MINOR.PATCH`). Tag releases on the master branch.
+
+## Documentation
+
+For any non-cosmetic change (features, bug fixes, protocol updates, config changes), review and update:
+- **CLAUDE.md** — architecture, conventions, protocol details, pitfalls
+- **README.md** — user-facing feature list, controls, screenshots
+- **SVG mockups** (`docs/images/`) — if the UI changed visually
+- **Unit tests** (`test/`) — update or add tests for any changes to protocol, state machine, or app logic
+
+Do this before committing. Don't let docs or tests drift from the code.
 
 ## Common Pitfalls
 

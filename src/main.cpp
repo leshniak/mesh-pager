@@ -65,6 +65,12 @@ uint8_t rxFrameBuf[protocol::kRxBufferLen] = {};  ///< Buffer for received radio
 size_t rxFrameLen = 0;         ///< Length of the received frame in rxFrameBuf
 protocol::PacketDedup<> packetDedup;  ///< Deduplication cache (64 entries, 10min expiry)
 
+// ── Cached sensor readings ──────────────────────────────────────────────────
+// Read once per loop iteration (at the top, before rendering) to avoid I2C
+// bus contention if the radio ISR fires mid-transaction.
+uint8_t cachedBatteryPercent = 0;  ///< Battery level 0–100, updated each loop
+bool cachedCharging = false;       ///< USB charging state, updated each loop
+
 // ── UI state flags ──────────────────────────────────────────────────────────
 // These are the "dirty flag" rendering system: any change sets dirty=true,
 // and the end of loop() redraws if needed.
@@ -86,7 +92,15 @@ uint32_t flashStartMs = 0;    ///< millis() when the flash started (auto-clears 
 /// Copies the raw frame into rxFrameBuf and sets the pendingRx flag.
 /// The actual parsing happens in handleReceive() during the main loop,
 /// not in the callback (keeps ISR-context work minimal).
+///
+/// rxProcessing guards against a race: if we're mid-parse in handleReceive(),
+/// a new packet arriving would overwrite the buffer with partial data.
+/// In that case we drop the new packet — it will likely be received again
+/// via another relay path (and deduplication handles it if not).
+volatile bool rxProcessing = false;  ///< True while handleReceive() is reading rxFrameBuf
+
 void onRadioRx(const uint8_t* data, size_t len) {
+    if (rxProcessing) return;  // Buffer in use — drop to avoid corruption
     if (len <= protocol::kRxBufferLen) {
         memcpy(rxFrameBuf, data, len);
         rxFrameLen = len;
@@ -159,6 +173,7 @@ bool handleTransmit(uint32_t now) {
 void handleReceive(uint32_t now) {
     if (!pendingRx) return;
     pendingRx = false;
+    rxProcessing = true;  // Lock buffer — ISR will drop packets while we parse
 
     protocol::PacketHeader hdr;
     char textOut[200];
@@ -167,6 +182,8 @@ void handleReceive(uint32_t now) {
     auto err = protocol::parsePacket(
         rxFrameBuf, rxFrameLen, channelKeyBytes,
         hdr, textOut, sizeof(textOut), textLen);
+
+    rxProcessing = false;  // Unlock buffer — safe for ISR to write again
 
     if (err != protocol::MeshError::Ok) return;  // Decryption/parse failure
     if (hdr.channelHash != channelHashByte) return;  // Different channel
@@ -199,7 +216,7 @@ void handleSleep() {
     displaySleeping = true;
     touchInput.consumeNextTouch();  // Next touch = wake, not action
 
-    if (hal::power::isCharging() || stayAwake) {
+    if (cachedCharging || stayAwake) {
         hal::display::sleep();    // Display off only — MCU and radio stay alive
         return;
     }
@@ -228,9 +245,8 @@ void renderFrame(uint32_t now) {
     ui::RenderState state;
     state.channelName = channelName;
     state.nodeId = nodeId;
-    const int32_t rawBat = M5.Power.getBatteryLevel();
-    state.batteryPercent = (rawBat >= 0 && rawBat <= 100) ? static_cast<uint8_t>(rawBat) : 0;
-    state.isCharging = hal::power::isCharging();
+    state.batteryPercent = cachedBatteryPercent;
+    state.isCharging = cachedCharging;
     state.stayAwake = stayAwake;
     state.messageText = cannedMessages.current().data();
     state.messageIndex = cannedMessages.index();
@@ -270,6 +286,7 @@ void setup() {
     // Disable unused peripherals for power savings
     M5.Imu.sleep();                           // BMI270 not used (suspended via power manager too)
     M5.Power.setExtOutput(false);             // Disable external 5V output rail
+    M5.Speaker.setVolume(config::kSpeakerVolume);  // Max volume for small piezo
     setCpuFrequencyMhz(config::kCpuFreqMHz); // 80MHz saves ~25% power vs 160MHz default
 
     hal::power::init();    // I2C, IO expanders, PMIC charging parameters
@@ -355,7 +372,14 @@ void loop() {
     radioHal.pollRx(); // Check for pending radio packets (interrupt-driven)
 
     const uint32_t now = millis();
-    const bool charging = hal::power::isCharging();
+
+    // Cache I2C sensor reads once per loop — keeps them out of render path
+    // and avoids bus contention with radio/touch interrupts.
+    const int32_t rawBat = M5.Power.getBatteryLevel();
+    cachedBatteryPercent = (rawBat >= 0 && rawBat <= 100) ? static_cast<uint8_t>(rawBat) : 0;
+    cachedCharging = hal::power::isCharging();
+
+    const bool charging = cachedCharging;
 
     // ── 1. Detect USB charge state changes ──────────────────────────────────
     // Plugging/unplugging USB should wake the display and reset the sleep timer.

@@ -220,12 +220,17 @@ void touchEnterHibernation() {
 /// uses this pin as a reset input — a LOW pulse brings it out of hibernation.
 /// After the pulse, SYS_IRQ is returned to INPUT_PULLUP for normal operation
 /// (shared with IO expander interrupt output).
+///
+/// The expander IRQ latch is cleared before and after the pulse to avoid
+/// a stale LOW from the expander interfering with the touch wake sequence.
 void touchWakePulseOnSysIrq() {
+    clearExpanderIrqLatch();       // Clear any pending expander IRQ first
     pinMode(static_cast<int>(SYS_IRQ), OUTPUT);
     digitalWrite(static_cast<int>(SYS_IRQ), LOW);
     delay(1);
     pinMode(static_cast<int>(SYS_IRQ), INPUT_PULLUP);
     delay(5);  // Wait for touch controller to initialize
+    clearExpanderIrqLatch();       // Clear any IRQ generated during the pulse
 }
 
 // ============================================================================

@@ -327,8 +327,10 @@ void Renderer::drawCenteredText(const char* text, int16_t cx, int16_t cy,
     const int16_t lineHeight = sprite_.fontHeight();
     const int maxLines = (maxHeight > 0) ? (maxHeight / lineHeight) : 8;
 
-    // Word-wrap into fixed-size line buffers
-    char lines[8][32];
+    // Word-wrap into fixed-size line buffers (static to reduce stack pressure —
+    // only called from the main loop, never reentrantly)
+    static char lines[8][32];
+    static char probe[128];
     int lineCount = 0;
     const char* p = text;
 
@@ -338,7 +340,6 @@ void Renderer::drawCenteredText(const char* text, int16_t cx, int16_t cy,
 
         // Probe characters one at a time, tracking the best word-break position
         size_t bestBreak = 0;
-        char probe[128];
         size_t i = 0;
         for (; p[i] && i < sizeof(probe) - 1; ++i) {
             if (p[i] == '\n') { bestBreak = i; break; }  // Explicit line break

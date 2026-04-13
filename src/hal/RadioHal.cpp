@@ -73,6 +73,8 @@ protocol::MeshError RadioHal::transmit(const uint8_t* data, size_t len) {
     // manually restart RX mode. During TX, incoming packets are missed.
     const int result = radio.transmit(const_cast<uint8_t*>(data), len);
     if (result != RADIOLIB_ERR_NONE) {
+        radio.standby();       // Ensure clean state after TX failure
+        radio.startReceive();  // Resume listening despite the error
         return protocol::MeshError::RadioTxFailed;
     }
     radio.startReceive();  // return to RX immediately after TX
@@ -86,12 +88,14 @@ void RadioHal::pollRx() {
     // Read the received packet from the radio's FIFO
     const int packetLen = radio.getPacketLength();
     if (packetLen <= 0 || packetLen > static_cast<int>(protocol::kRxBufferLen)) {
-        radio.startReceive();  // discard oversized packets, keep listening
+        radio.standby();       // Reset radio state before restarting RX
+        radio.startReceive();
         return;
     }
 
     uint8_t buf[protocol::kRxBufferLen];
     if (radio.readData(buf, packetLen) != RADIOLIB_ERR_NONE) {
+        radio.standby();       // Clear error state before restarting RX
         radio.startReceive();
         return;
     }

@@ -24,9 +24,11 @@ inline constexpr uint16_t kButtonHoldMs      = 1000;  ///< Physical button hold 
 inline constexpr uint8_t  kCpuFreqMHz        = 80;    ///< CPU clock (reduced from 160MHz default; saves ~25% power)
 inline constexpr uint8_t  kLoopIdleDelayMs   = 10;    ///< delay() in idle loop — lets CPU enter automatic light sleep
 
-// ── Buzzer tones ────────────────────────────────────────────────────────────
-// Square-wave tones via M5.Speaker.tone(). Frequencies are musical notes
-// from the C major scale (C7–A7 range, where small piezo buzzers are loudest).
+// ── Speaker / Buzzer ────────────────────────────────────────────────────────
+// M5.Speaker volume (0–255) and square-wave tone frequencies via tone().
+// Frequencies are musical notes from C major (C7–A7 range, piezo sweet spot).
+
+inline constexpr uint8_t  kSpeakerVolume     = 128;   ///< Speaker volume (0–255, default is 64)
 
 inline constexpr uint16_t kTxToneHz          = 2637;  ///< Transmit confirmation — E7
 inline constexpr uint16_t kRxToneHz          = 3520;  ///< Receive notification — A7

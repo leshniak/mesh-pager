@@ -228,7 +228,9 @@ void renderFrame(uint32_t now) {
     ui::RenderState state;
     state.channelName = channelName;
     state.nodeId = nodeId;
-    state.batteryPercent = static_cast<uint8_t>(M5.Power.getBatteryLevel());
+    const int32_t rawBat = M5.Power.getBatteryLevel();
+    state.batteryPercent = (rawBat >= 0 && rawBat <= 100) ? static_cast<uint8_t>(rawBat) : 0;
+    state.isCharging = hal::power::isCharging();
     state.stayAwake = stayAwake;
     state.messageText = cannedMessages.current().data();
     state.messageIndex = cannedMessages.index();
@@ -487,9 +489,12 @@ void loop() {
 
     // ── 7. Physical button (KEY1) states ────────────────────────────────────
     // M5.BtnA.was*() methods are consumed on first call — read once and reuse.
-    const bool singleClick = M5.BtnA.wasSingleClicked();
-    const bool doubleClick = M5.BtnA.wasDoubleClicked();
-    const bool longPress   = M5.BtnA.pressedFor(config::kButtonHoldMs);
+    // Ignore all button events during the post-wake debounce window to prevent
+    // the wake button press from triggering power-off or send.
+    const bool inDebounce = (now < config::kDebounceGuardMs);
+    const bool singleClick = M5.BtnA.wasSingleClicked() && !inDebounce;
+    const bool doubleClick = M5.BtnA.wasDoubleClicked() && !inDebounce;
+    const bool longPress   = M5.BtnA.pressedFor(config::kButtonHoldMs) && !inDebounce;
 
     if (singleClick || doubleClick) {
         lastActionMs = now;

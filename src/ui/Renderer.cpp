@@ -82,6 +82,19 @@ void Renderer::drawStatusBar(const RenderState& state, int16_t y) {
         sprite_.fillRect(batX + 1, batY + 1, fillW, batH - 2, batColor);
     }
 
+    // Lightning bolt overlay when charging (3×5 px, centered in battery icon)
+    if (state.isCharging) {
+        const int16_t bx = batX + batW / 2 - 1;
+        const int16_t by = batY + 1;
+        sprite_.drawPixel(bx + 1, by,     kColorTextPrimary);
+        sprite_.drawPixel(bx + 1, by + 1,  kColorTextPrimary);
+        sprite_.drawPixel(bx,     by + 2,  kColorTextPrimary);
+        sprite_.drawPixel(bx + 1, by + 2,  kColorTextPrimary);
+        sprite_.drawPixel(bx + 2, by + 2,  kColorTextPrimary);
+        sprite_.drawPixel(bx,     by + 3,  kColorTextPrimary);
+        sprite_.drawPixel(bx,     by + 4,  kColorTextPrimary);
+    }
+
     // Battery percentage text (right-aligned, left of the icon)
     char pctBuf[6];
     snprintf(pctBuf, sizeof(pctBuf), "%d%%", state.batteryPercent);

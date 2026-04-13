@@ -32,6 +32,7 @@ struct RenderState {
     const char* channelName = nullptr;   ///< Meshtastic channel name (from secrets.h)
     protocol::NodeId nodeId = 0;         ///< Local node ID (displayed as !XXXXXXXX)
     uint8_t batteryPercent = 0;          ///< Battery level 0–100 from PMIC
+    bool isCharging = false;             ///< True when USB power is connected
     bool stayAwake = false;              ///< Show stay-awake indicator in status bar
 
     // ── Message card ──

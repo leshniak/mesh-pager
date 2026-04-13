@@ -90,8 +90,76 @@ void test_key_length() {
     TEST_ASSERT_EQUAL(32, kKeyLen);
 }
 
+void test_key_bits() {
+    TEST_ASSERT_EQUAL(256, kKeyBits);
+    TEST_ASSERT_EQUAL(kKeyLen * 8, kKeyBits);
+}
+
 void test_nonce_length() {
     TEST_ASSERT_EQUAL(16, kNonceLen);
+}
+
+void test_max_encrypted_len() {
+    TEST_ASSERT_EQUAL(240, kMaxEncryptedLen);
+}
+
+void test_max_text_len() {
+    TEST_ASSERT_EQUAL(127, kMaxTextLen);
+    TEST_ASSERT_TRUE(kMaxTextLen < kMaxEncryptedLen);  // text must fit in payload
+}
+
+void test_rx_buffer_len() {
+    TEST_ASSERT_EQUAL(255, kRxBufferLen);  // RadioLib max receive buffer
+}
+
+void test_min_proto_payload_len() {
+    TEST_ASSERT_EQUAL(2, kMinProtoPayloadLen);
+}
+
+// ── Header field offsets ────────────────────────────────────────────────────
+
+void test_header_offsets_are_contiguous() {
+    TEST_ASSERT_EQUAL(0,  kOffDest);
+    TEST_ASSERT_EQUAL(4,  kOffSource);
+    TEST_ASSERT_EQUAL(8,  kOffPacketId);
+    TEST_ASSERT_EQUAL(12, kOffFlags);
+    TEST_ASSERT_EQUAL(13, kOffChannelHash);
+    TEST_ASSERT_EQUAL(14, kOffNextHop);
+    TEST_ASSERT_EQUAL(15, kOffRelayNode);
+    // Last field + 1 byte == total header length
+    TEST_ASSERT_EQUAL(kMeshHeaderLen, kOffRelayNode + 1);
+}
+
+// ── Nonce layout ────────────────────────────────────────────────────────────
+
+void test_nonce_layout() {
+    TEST_ASSERT_EQUAL(8, kNoncePacketIdLen);
+    TEST_ASSERT_EQUAL(8, kNonceSourceOffset);
+    TEST_ASSERT_EQUAL(4, kNonceSourceLen);
+    // packetId + source + padding must equal nonce length
+    TEST_ASSERT_EQUAL(kNonceLen, kNoncePacketIdLen + kNonceSourceLen + 4);
+}
+
+// ── MAC constants ───────────────────────────────────────────────────────────
+
+void test_mac_constants() {
+    TEST_ASSERT_EQUAL(6, kMacLen);
+    TEST_ASSERT_EQUAL(2, kMacNodeIdOffset);
+    // 4 bytes from offset to end of MAC = 32-bit node ID
+    TEST_ASSERT_EQUAL(4, kMacLen - kMacNodeIdOffset);
+}
+
+// ── Protobuf field tags ─────────────────────────────────────────────────────
+
+void test_proto_tags() {
+    // Tag encoding: (fieldNumber << 3) | wireType
+    TEST_ASSERT_EQUAL_UINT8(0x08, kProtoTagPortnum);   // field 1, wire type 0 (varint)
+    TEST_ASSERT_EQUAL_UINT8(0x12, kProtoTagPayload);   // field 2, wire type 2 (length-delimited)
+    TEST_ASSERT_EQUAL_UINT8(1, kProtoFieldPortnum);
+    TEST_ASSERT_EQUAL_UINT8(2, kProtoFieldPayload);
+    // Verify tags match field numbers
+    TEST_ASSERT_EQUAL_UINT8(kProtoFieldPortnum << 3 | 0, kProtoTagPortnum);
+    TEST_ASSERT_EQUAL_UINT8(kProtoFieldPayload << 3 | 2, kProtoTagPayload);
 }
 
 // ── PacketHeader defaults ───────────────────────────────────────────────────
@@ -124,7 +192,16 @@ int main() {
     RUN_TEST(test_broadcast_addr);
     RUN_TEST(test_header_length);
     RUN_TEST(test_key_length);
+    RUN_TEST(test_key_bits);
     RUN_TEST(test_nonce_length);
+    RUN_TEST(test_max_encrypted_len);
+    RUN_TEST(test_max_text_len);
+    RUN_TEST(test_rx_buffer_len);
+    RUN_TEST(test_min_proto_payload_len);
+    RUN_TEST(test_header_offsets_are_contiguous);
+    RUN_TEST(test_nonce_layout);
+    RUN_TEST(test_mac_constants);
+    RUN_TEST(test_proto_tags);
 
     RUN_TEST(test_header_defaults);
 

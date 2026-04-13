@@ -82,7 +82,7 @@ This project implements a **minimal subset** of the Meshtastic over-the-air prot
 | Encryption | `MeshCrypto.cpp` — AES-256-CTR, nonce layout in `MeshTypes.h` (`kNonce*` constants) | [crypto.md](https://meshtastic.org/docs/overview/encryption/) |
 | Protobuf codec | `MeshCodec.cpp` — hand-rolled encode/decode for `Data` message (portnum + payload only) | [portnums.proto](https://github.com/meshtastic/protobufs/blob/master/meshtastic/portnums.proto) |
 | Channel hash | `MeshCodec.cpp` — `computeChannelHash()` XOR algorithm | [channel.proto](https://github.com/meshtastic/protobufs/blob/master/meshtastic/channel.proto) |
-| Radio params | `RadioConfig.h` — frequency, SF, BW, sync word matching LongFast EU preset | [radiomaster.h / modem presets](https://github.com/meshtastic/firmware/blob/master/src/mesh/RadioInterface.cpp) |
+| Radio params | `RadioConfig.h` — frequency, SF, BW, sync word matching MediumFast EU preset | [radiomaster.h / modem presets](https://github.com/meshtastic/firmware/blob/master/src/mesh/RadioInterface.cpp) |
 | Node ID | `MeshCodec.cpp` — `nodeIdFromMac()` last-4-bytes-of-MAC convention | [NodeDB.cpp](https://github.com/meshtastic/firmware/blob/master/src/mesh/NodeDB.cpp) |
 
 ### What we DON'T implement

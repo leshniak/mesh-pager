@@ -120,16 +120,16 @@ mesh-remote/
 
 ## Radio Configuration
 
-Default settings match the **Meshtastic LongFast EU** preset:
+Default settings match the **Meshtastic MediumFast EU** preset (SF9). A LongFast EU config (SF11, longer range, slower) is also available in `RadioConfig.h`.
 
-| Parameter | Value |
-|-----------|-------|
-| Frequency | 869.525 MHz |
-| Bandwidth | 250 kHz |
-| Spreading Factor | 9 |
-| Coding Rate | 4/5 |
-| TX Power | 22 dBm |
-| Sync Word | 0x2B |
+| Parameter | MediumFast (active) | LongFast |
+|-----------|---------------------|----------|
+| Frequency | 869.525 MHz | 869.525 MHz |
+| Bandwidth | 250 kHz | 250 kHz |
+| Spreading Factor | 9 | 11 |
+| Coding Rate | 4/5 | 4/5 |
+| TX Power | 22 dBm | 22 dBm |
+| Sync Word | 0x2B | 0x2B |
 
 ## Dependencies
 
